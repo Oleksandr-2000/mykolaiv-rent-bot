@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 
-url = "https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent/"
+url = "https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent/nikolaev/"
 
 response = requests.get(
     url,
