@@ -7,38 +7,34 @@ from urllib.parse import urljoin
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-URL = "https://makler.ua/ua/nik-nikolaev/real-estate/real-estate-for-rent/apartments-for-rent"
+LIST_URL = "https://makler.ua/ua/nik-nikolaev/real-estate/real-estate-for-rent/apartments-for-rent"
 
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 Chrome/140.0 Safari/537.36"
-    )
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+    "Accept-Language": "uk-UA,uk;q=0.9,ru;q=0.8",
 }
 
 
-def send_telegram(message):
-
+def send_telegram(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    response = requests.post(
+    r = requests.post(
         url,
         json={
             "chat_id": CHAT_ID,
-            "text": message,
+            "text": text,
             "disable_web_page_preview": False,
         },
         timeout=30,
     )
 
-    response.raise_for_status()
+    r.raise_for_status()
 
 
-# Загружаем список объявлений
 response = requests.get(
-    URL,
+    LIST_URL,
     headers=HEADERS,
-    timeout=30
+    timeout=30,
 )
 
 response.raise_for_status()
@@ -47,189 +43,116 @@ soup = BeautifulSoup(response.text, "html.parser")
 
 print("Размер страницы:", len(response.text))
 
-# Находим реальные карточки
-cards = soup.find_all(
-    "article",
-    attrs={"id": re.compile(r"^tr_an-\d+$")}
-)
+articles = soup.find_all("article")
 
-print("Найдено карточек:", len(cards))
+print("Найдено article:", len(articles))
 
 results = []
 
+for article in articles:
 
-for card in cards:
+    title_tag = article.select_one(".ls-detail_antTitle")
+    price_tag = article.select_one(".ls-detail_price")
+    text_tag = article.select_one(".ls-detail_anText")
+    link_tag = article.select_one("a.ls-detail_anUrl")
 
-    # -------------------------
-    # Ссылка
-    # -------------------------
-
-    link_tag = card.select_one("a.ls-detail_anUrl")
-
-    if not link_tag:
+    if not title_tag or not link_tag:
         continue
 
+    title = title_tag.get_text(" ", strip=True)
+    description = (
+        text_tag.get_text(" ", strip=True)
+        if text_tag
+        else ""
+    )
+
+    full_text = f"{title} {description}".lower()
+
+    # Цена
+    price = None
+
+    if price_tag:
+        price_text = price_tag.get_text(" ", strip=True)
+
+        match = re.search(
+            r"(\d[\d\s]*)\s*(uah|грн)",
+            price_text,
+            re.IGNORECASE,
+        )
+
+        if match:
+            price = int(
+                re.sub(r"\D", "", match.group(1))
+            )
+
+    if price is None:
+        continue
+
+    # Максимальная цена
+    if price > 6000:
+        continue
+
+    # Только 3 комнаты
+    three_rooms = any(
+        re.search(pattern, full_text)
+        for pattern in [
+            r"\b3[- ]комнат",
+            r"\b3[- ]кімнат",
+            r"\b3х[- ]?комнат",
+            r"\b3х[- ]?кімнат",
+            r"\bтри[- ]комнат",
+            r"\bтри[- ]кімнат",
+        ]
+    )
+
+    if not three_rooms:
+        continue
+
+    # Исключаем посуточные варианты
+    daily_words = [
+        "посуточно",
+        "подобово",
+        "посуточная",
+        "подобова",
+        "за сутки",
+        "за ночь",
+        "ночь",
+    ]
+
+    if any(word in full_text for word in daily_words):
+        continue
+
+    # Ссылка
     href = link_tag.get("href")
 
     if not href:
         continue
 
-    link = urljoin(URL, href)
-
-
-    # -------------------------
-    # Название
-    # -------------------------
-
-    title = link_tag.get_text(
-        " ",
-        strip=True
-    )
-
-    title_lower = title.lower()
-
-
-    # -------------------------
-    # Описание
-    # -------------------------
-
-    description_tag = card.select_one(
-        ".ls-detail_anText"
-    )
-
-    description = (
-        description_tag.get_text(
-            " ",
-            strip=True
-        )
-        if description_tag
-        else ""
-    )
-
-    full_text = (
-        title + " " + description
-    )
-
-    text_lower = full_text.lower()
-
-
-    # -------------------------
-    # Цена
-    # -------------------------
-
-    price_tag = card.select_one(
-        ".ls-detail_price"
-    )
-
-    if not price_tag:
-        continue
-
-    price_text = price_tag.get_text(
-        " ",
-        strip=True
-    )
-
-    price_match = re.search(
-        r"([\d\s]+)",
-        price_text
-    )
-
-    if not price_match:
-        continue
-
-    price = int(
-        re.sub(
-            r"\D",
-            "",
-            price_match.group(1)
-        )
-    )
-
-
-    # -------------------------
-    # Максимум 6000 грн
-    # -------------------------
-
-    if price > 6000:
-        continue
-
-
-    # -------------------------
-    # Исключаем посуточные
-    # -------------------------
-
-    bad_words = [
-        "посуточно",
-        "подобово",
-        "посуточная",
-        "посуточную",
-        "сутки",
-        "за ночь",
-        "почасово",
-        "на ночь",
-    ]
-
-    if any(
-        word in text_lower
-        for word in bad_words
-    (sad)
-        continue
-
-
-    # -------------------------
-    # Только 3 комнаты
-    # -------------------------
-
-    room_patterns = [
-        r"\b3[- ]комнат",
-        r"\b3х[- ]комнат",
-        r"\b3х\s*комнат",
-        r"\b3\s*комнат",
-        r"\b3\s*кімнат",
-        r"\b3[- ]кімнат",
-        r"\bтр[её]хкомнат",
-    ]
-
-    if not any(
-        re.search(pattern, text_lower)
-        for pattern in room_patterns
-    (sad)
-        continue
-
-
-    # -------------------------
-    # Сохраняем
-    # -------------------------
+    link = urljoin(LIST_URL, href)
 
     results.append({
         "title": title,
-        "description": description,
         "price": price,
+        "description": description,
         "link": link,
     })
 
 
-print(
-    "Подходящих объявлений:",
-    len(results)
-)
+print("Подходящих объявлений:", len(results))
 
-
-# -------------------------
-# Telegram сообщение
-# -------------------------
 
 if results:
 
     message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+    message += "Найдены подходящие объявления:\n\n"
 
-    for ad in results[:10]:
+    for item in results[:10]:
 
         message += (
-            f"🏠 {ad['title']}\n"
-            f"💰 {ad['price']} грн\n"
-            f"📝 {ad['description']}\n"
-            f"🔗 {ad['link']}\n\n"
+            f"🏠 {item['title']}\n"
+            f"💰 {item['price']} грн\n"
+            f"📝 {item['description'][:300]}\n"
+            f"🔗 {item['link']}\n\n"
         )
 
 else:
