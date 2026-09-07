@@ -1,6 +1,8 @@
 import os
+import re
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -29,47 +31,67 @@ print(
     else "нет"
 )
 
-# Ищем все ссылки на объявления
 links = []
 
 for a in soup.find_all("a", href=True):
 
     href = a["href"]
 
-    if "/an/" not in href:
+    # Нас интересуют только ссылки вида /an/123456
+    if not re.search(r"/an/\d+", href):
         continue
 
-    if href not in links:
-        links.append(href)
+    full_url = urljoin(URL, href)
 
-print("Найдено ссылок:", len(links))
+    if full_url not in links:
+        links.append(full_url)
 
-# Показываем первые 5 элементов,
-# в которых находятся ссылки на объявления
-count = 0
 
-for a in soup.find_all("a", href=True):
+print("================================")
+print("НАЙДЕНЫ НАСТОЯЩИЕ ОБЪЯВЛЕНИЯ:", len(links))
+print("================================")
 
-    if "/an/" not in a["href"]:
-        continue
+for link in links[:10]:
+    print(link)
 
-    parent = a.parent
 
-    print("\n========== КАРТОЧКА", count + 1, "==========")
-    print(parent.prettify()[:4000])
-    print("========== КОНЕЦ КАРТОЧКИ ==========\n")
+# Показываем HTML родительского элемента первой настоящей ссылки
+if links:
 
-    count += 1
+    first_link = links[0]
 
-    if count >= 5:
-        break
+    first_a = None
+
+    for a in soup.find_all("a", href=True):
+
+        href = a["href"]
+
+        if re.search(r"/an/\d+", href):
+            first_a = a
+            break
+
+    if first_a:
+
+        print("\n========== НАСТОЯЩАЯ КАРТОЧКА ==========")
+
+        parent = first_a
+
+        # Поднимаемся на несколько уровней,
+        # чтобы увидеть контейнер объявления
+        for _ in range(4):
+
+            if parent.parent:
+                parent = parent.parent
+
+        print(parent.prettify()[:8000])
+
+        print("========== КОНЕЦ КАРТОЧКИ ==========")
 
 
 # Telegram
 message = (
     "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-    f"Диагностика Makler завершена.\n"
-    f"Найдено ссылок: {len(links)}"
+    f"Найдено настоящих объявлений: {len(links)}"
 )
 
 telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -86,3 +108,4 @@ telegram_response = requests.post(
 telegram_response.raise_for_status()
 
 print("Сообщение отправлено в Telegram")
+
