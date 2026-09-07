@@ -91,22 +91,50 @@ for article in articles:
     # Максимальная цена
     if price > 6000:
         continue
+# Только аренда ВСЕЙ 3-комнатной квартиры
+three_rooms = any(
+    re.search(pattern, full_text)
+    for pattern in [
+        r"\bздаю\s+3х\s+кімнатну",
+        r"\bздам\s+3х\s+кімнатну",
+        r"\bздається\s+3[- ]кімнатна",
+        r"\bсдам\s+3[- ]комнатную",
+        r"\bсдается\s+3[- ]комнатная",
+        r"\bсдаю\s+3[- ]комнатную",
+        r"\bаренда\s+3[- ]комнатной",
+        r"\bоренда\s+3[- ]кімнатної",
+    ]
+)
 
-    # Только 3 комнаты
-    three_rooms = any(
-        re.search(pattern, full_text)
-        for pattern in [
-            r"\b3[- ]комнат",
-            r"\b3[- ]кімнат",
-            r"\b3х[- ]?комнат",
-            r"\b3х[- ]?кімнат",
-            r"\bтри[- ]комнат",
-            r"\bтри[- ]кімнат",
-        ]
-    )
+if not three_rooms:
+    continue
+python
+# Не брать явно устаревшие объявления
+old_words = [
+    "объявление уже не активно",
+    "оголошення вже не активно",
+    "страница устарела",
+    "сторінка застаріла",
+]
 
-    if not three_rooms:
-        continue
+if any(word in full_text for word in old_words):
+    continue
+
+
+
+# Не брать отдельную комнату в квартире
+single_room_words = [
+    "1 комната в 3",
+    "1 кімната в 3",
+    "комната в 3х комнатной",
+    "кімната в 3х кімнатній",
+    "комнату в 3х комнатной",
+    "кімнату в 3х кімнатній",
+]
+
+if any(word in full_text for word in single_room_words):
+    continue
+    
 
     # Исключаем посуточные варианты
     daily_words = [
