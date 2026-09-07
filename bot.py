@@ -1,4 +1,4 @@
-python import os
+import os
 import requests
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
