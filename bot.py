@@ -177,7 +177,11 @@ for a in soup.find_all("a", href=True):
 
 
 print("Найдено ссылок на объявления:", len(links))
-
+if links:
+    test_soup = get_page(links[0])
+    print("===== ПЕРВОЕ ОБЪЯВЛЕНИЕ =====")
+    print(" ".join(test_soup.stripped_strings)[:5000])
+    print("===== КОНЕЦ ОБЪЯВЛЕНИЯ =====")
 
 results = []
 
