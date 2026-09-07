@@ -126,4 +126,8 @@ telegram_response = requests.post(
 telegram_response.raise_for_status()
 
 print(f"Найдено вариантов: {len(results)}")
-
+print("Размер страницы:", len(response.text))
+print("Заголовок страницы:", soup.title.get_text(strip=True) if soup.title else "нет")
+print("Количество ссылок:", len(soup.find_all("a", href=True)))
+print("Фрагмент страницы:")
+print(soup.get_text(" ", strip=True)[:3000])
