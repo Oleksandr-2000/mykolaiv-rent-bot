@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent/an/450133
+URL = "https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent/an/450133"
 
 headers = {"User-Agent": "Mozilla/5.0"}
 
