@@ -161,7 +161,7 @@ def check_ad(url):
 # Получаем список объявлений
 soup = get_page(LIST_URL)
 
-links = []
+inks = []
 
 for a in soup.find_all("a", href=True):
 
@@ -169,7 +169,10 @@ for a in soup.find_all("a", href=True):
 
     if "/an/" not in href:
         continue
+if not re.search(r"/an/\d+", href):
+    continue
 
+https://re.search
     full_url = urljoin(LIST_URL, href)
 
     if full_url not in links:
@@ -177,6 +180,7 @@ for a in soup.find_all("a", href=True):
 
 
 print("Найдено ссылок на объявления:", len(links))
+
 if links:
     test_soup = get_page(links[0])
     print("===== ПЕРВОЕ ОБЪЯВЛЕНИЕ =====")
