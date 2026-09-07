@@ -2,64 +2,118 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 URL = "https://makler.ua/ua/nik-nikolaev/real-estate/real-estate-for-rent/apartments-for-rent"
 
-response = requests.get(
-    URL,
-    headers={"User-Agent": "Mozilla/5.0"},
-    timeout=30
-)
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
+
+response = requests.get(URL, headers=headers, timeout=30)
 response.raise_for_status()
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-found = []
+results = []
 
-for link in soup.find_all("a", href=True):
-    text = " ".join(link.stripped_strings)
+# Ищем все ссылки на объявления
+for a in soup.find_all("a", href=True):
+    text = " ".join(a.stripped_strings)
 
-    # Ищем только 3-комнатные объявления
-    if not re.search(r"\b3\s*(?:-|х|x)?\s*(?:ком|к|кім)", text, re.I):
+    if not text:
         continue
 
-    # Ищем цену до 6000 грн
-    prices = re.findall(r"[\d\s]+(?=\s*(?:UAH|грн))", text, re.I)
-    if not prices:
+    low = text.lower()
+
+    # Только 3 комнаты
+    if not re.search(r"\b3\s*[-хx]?\s*(?:ком|кім)", low):
         continue
 
-    price = int(re.sub(r"\D", "", prices[0]))
+    # Исключаем посуточную аренду
+    bad_words = [
+        "посуточно",
+        "посут",
+        "сутки",
+        "ночь",
+        "ночь",
+        "почасово",
+        "час",
+    ]
+
+    if any(word in low for word in bad_words):
+        continue
+
+    # Ищем цену в гривнах
+    price_match = re.search(
+        r"(\d[\d\s]*)\s*(?:uah|грн)",
+        text,
+        re.IGNORECASE
+    )
+
+    if not price_match:
+        continue
+
+    price = int(re.sub(r"\D", "", price_match.group(1)))
+
     if price > 6000:
         continue
 
-    href = link["href"]
+    # Проверяем этаж
+    floor_match = re.search(
+        r"(?:поверх|этаж)\s*(\d+)",
+        low
+    )
 
-    if href.startswith("/"):
-        href = "https://makler.ua" + href
+    floor = floor_match.group(1) if floor_match else "не указан"
 
-    found.append((text, price, href))
+    # Ссылка
+    link = urljoin(URL, a["href"])
+
+    # Название
+    title = text.replace("\n", " ").strip()
+
+    results.append({
+        "title": title[:400],
+        "price": price,
+        "floor": floor,
+        "link": link
+    })
+
 
 # Убираем дубли
 unique = {}
-for text, price, href in found:
-    unique[href] = (text, price, href)
 
-found = list(unique.values())
+for item in results:
+    unique[item["link"]] = item
 
-if not found:
-    message = "🏠 «Николаев Аренда»\n\nНовых подходящих объявлений пока не найдено."
+results = list(unique.values())
+
+
+if results:
+    message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+    message += "Найдены варианты до 6000 грн:\n\n"
+
+    for item in results[:10]:
+        message += (
+            f"🏠 {item['title']}\n"
+            f"💰 {item['price']} грн\n"
+            f"🏢 Этаж: {item['floor']}\n"
+            f"🔗 {item['link']}\n\n"
+        )
 else:
-    message = "🏠 «Николаев Аренда»\n\nНайдены подходящие объявления:\n\n"
+    message = (
+        "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+        "Подходящих новых объявлений не найдено."
+    )
 
-    for text, price, href in found[:10]:
-        message += f"💰 {price} грн\n{text[:300]}\n{href}\n\n"
 
 telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-result = requests.post(
+telegram_response = requests.post(
     telegram_url,
     json={
         "chat_id": CHAT_ID,
@@ -69,6 +123,7 @@ result = requests.post(
     timeout=30
 )
 
-result.raise_for_status()
+telegram_response.raise_for_status()
 
-print(f"Отправлено объявлений: {len(found)}")
+print(f"Найдено вариантов: {len(results)}")
+
