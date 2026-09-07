@@ -10,20 +10,16 @@ response = requests.get(
 )
 
 print("HTTP:", response.status_code)
-print("Размер:", len(response.text))
 
 soup = BeautifulSoup(response.text, "html.parser")
 
 for a in soup.find_all("a", href=True):
 
-    text = a.get_text(" ", strip=True).lower()
     href = a["href"]
+    text = a.get_text(" ", strip=True)
 
-    if "микола" in text or "микол" in href.lower():
+    if "809" in href:
 
-        print(
-            "НАЙДЕНО:",
-            text[:100],
-            "=>",
-            href
-        )
+        print("ССЫЛКА:", href)
+        print("ТЕКСТ:", text)
+        print("---")
