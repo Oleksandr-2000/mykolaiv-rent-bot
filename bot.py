@@ -18,7 +18,7 @@ HEADERS = {
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    r = requests.post(
+    response = requests.post(
         url,
         json={
             "chat_id": CHAT_ID,
@@ -28,7 +28,7 @@ def send_telegram(text):
         timeout=30,
     )
 
-    r.raise_for_status()
+    response.raise_for_status()
 
 
 response = requests.get(
@@ -49,6 +49,7 @@ print("Найдено article:", len(articles))
 
 results = []
 
+
 for article in articles:
 
     title_tag = article.select_one(".ls-detail_antTitle")
@@ -60,83 +61,93 @@ for article in articles:
         continue
 
     title = title_tag.get_text(" ", strip=True)
-    description = (
-        text_tag.get_text(" ", strip=True)
-        if text_tag
-        else ""
-    )
+
+    description = ""
+
+    if text_tag:
+        description = text_tag.get_text(" ", strip=True)
 
     full_text = f"{title} {description}".lower()
 
-    # Цена
+    # --------------------------------
+    # ЦЕНА
+    # --------------------------------
+
     price = None
 
     if price_tag:
-        price_text = price_tag.get_text(" ", strip=True)
+
+        price_text = price_tag.get_text(
+            " ",
+            strip=True
+        )
 
         match = re.search(
             r"(\d[\d\s]*)\s*(uah|грн)",
             price_text,
-            re.IGNORECASE,
+            re.IGNORECASE
         )
 
         if match:
+
             price = int(
-                re.sub(r"\D", "", match.group(1))
+                re.sub(
+                    r"\D",
+                    "",
+                    match.group(1)
+                )
             )
 
     if price is None:
         continue
 
-    # Максимальная цена
     if price > 6000:
         continue
-# Только аренда ВСЕЙ 3-комнатной квартиры
-three_rooms = any(
-    re.search(pattern, full_text)
-    for pattern in [
-        r"\bздаю\s+3х\s+кімнатну",
-        r"\bздам\s+3х\s+кімнатну",
-        r"\bздається\s+3[- ]кімнатна",
-        r"\bсдам\s+3[- ]комнатную",
-        r"\bсдается\s+3[- ]комнатная",
-        r"\bсдаю\s+3[- ]комнатную",
-        r"\bаренда\s+3[- ]комнатной",
-        r"\bоренда\s+3[- ]кімнатної",
+
+    # --------------------------------
+    # ТОЛЬКО ВСЯ 3-КОМНАТНАЯ КВАРТИРА
+    # --------------------------------
+
+    three_rooms = any(
+        re.search(pattern, full_text)
+        for pattern in [
+            r"\bздаю\s+3х\s+кімнатну",
+            r"\bздам\s+3х\s+кімнатну",
+            r"\bздається\s+3[- ]кімнатна",
+            r"\bсдам\s+3[- ]комнатную",
+            r"\bсдается\s+3[- ]комнатная",
+            r"\bсдаю\s+3[- ]комнатную",
+            r"\bаренда\s+3[- ]комнатной",
+            r"\bоренда\s+3[- ]кімнатної",
+        ]
+    )
+
+    if not three_rooms:
+        continue
+
+    # --------------------------------
+    # НЕ БЕРЁМ ОТДЕЛЬНУЮ КОМНАТУ
+    # --------------------------------
+
+    single_room_words = [
+        "1 комната в 3",
+        "1 кімната в 3",
+        "комната в 3х комнатной",
+        "кімната в 3х кімнатній",
+        "комнату в 3х комнатной",
+        "кімнату в 3х кімнатній",
     ]
-)
 
-if not three_rooms:
-    continue
-python
-# Не брать явно устаревшие объявления
-old_words = [
-    "объявление уже не активно",
-    "оголошення вже не активно",
-    "страница устарела",
-    "сторінка застаріла",
-]
+    if any(
+        word in full_text
+        for word in single_room_words
+    (sad)
+        continue
 
-if any(word in full_text for word in old_words):
-    continue
+    # --------------------------------
+    # ИСКЛЮЧАЕМ ПОСУТОЧНУЮ АРЕНДУ
+    # --------------------------------
 
-
-
-# Не брать отдельную комнату в квартире
-single_room_words = [
-    "1 комната в 3",
-    "1 кімната в 3",
-    "комната в 3х комнатной",
-    "кімната в 3х кімнатній",
-    "комнату в 3х комнатной",
-    "кімнату в 3х кімнатній",
-]
-
-if any(word in full_text for word in single_room_words):
-    continue
-    
-
-    # Исключаем посуточные варианты
     daily_words = [
         "посуточно",
         "подобово",
@@ -147,16 +158,25 @@ if any(word in full_text for word in single_room_words):
         "ночь",
     ]
 
-    if any(word in full_text for word in daily_words):
+    if any(
+        word in full_text
+        for word in daily_words
+    (sad)
         continue
 
-    # Ссылка
+    # --------------------------------
+    # ССЫЛКА
+    # --------------------------------
+
     href = link_tag.get("href")
 
     if not href:
         continue
 
-    link = urljoin(LIST_URL, href)
+    link = urljoin(
+        LIST_URL,
+        href
+    )
 
     results.append({
         "title": title,
@@ -166,20 +186,29 @@ if any(word in full_text for word in single_room_words):
     })
 
 
-print("Подходящих объявлений:", len(results))
+print(
+    "Подходящих объявлений:",
+    len(results)
+)
 
+
+# --------------------------------
+# TELEGRAM
+# --------------------------------
 
 if results:
 
-    message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-    message += "Найдены подходящие объявления:\n\n"
+    message = (
+        "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+        "Найдены подходящие объявления:\n\n"
+    )
 
     for item in results[:10]:
 
         message += (
             f"🏠 {item['title']}\n"
-            f"💰 {item['price']} грн\n"
-            f"📝 {item['description'][:300]}\n"
+            f"💰 {item['price']} грн/мес\n"
+            f"📝 {item['description'][:400]}\n"
             f"🔗 {item['link']}\n\n"
         )
 
