@@ -1,5 +1,4 @@
-python
-import os
+python import os
 import requests
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -17,4 +16,3 @@ response = requests.post(
 )
 
 response.raise_for_status()
-print("Сообщение отправлено")
