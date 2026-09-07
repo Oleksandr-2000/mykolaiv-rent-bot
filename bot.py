@@ -22,6 +22,24 @@ soup = BeautifulSoup(response.text, "html.parser")
 articles = soup.find_all("article", id=re.compile(r"^tr_an-"))
 print("Найдено article:", len(articles))
 
+for article in articles:
+    title_tag = article.select_one(".ls-detail_antTitle a")
+    price_tag = article.select_one(".ls-detail_price")
+
+    if title_tag:
+        title = title_tag.get_text(" ", strip=True)
+    else:
+        title = ""
+
+    if price_tag:
+        price = price_tag.get_text(" ", strip=True)
+    else:
+        price = ""
+
+    print("ОБЪЯВЛЕНИЕ:", title)
+    print("ЦЕНА:", price)
+    print("---")
+
 results = []
 
 for article in articles:
