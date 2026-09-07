@@ -9,82 +9,110 @@ CHAT_ID = os.environ["CHAT_ID"]
 
 URL = "https://makler.ua/ua/nik-nikolaev/real-estate/real-estate-for-rent/apartments-for-rent"
 
-headers = {
+HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 }
 
-response = requests.get(URL, headers=headers, timeout=30)
+response = requests.get(URL, headers=HEADERS, timeout=30)
 response.raise_for_status()
 
 soup = BeautifulSoup(response.text, "html.parser")
 
 results = []
 
-# Ищем все ссылки на объявления
+# Ищем ссылки, которые ведут на объявления
 for a in soup.find_all("a", href=True):
-    text = " ".join(a.stripped_strings)
 
-    if not text:
+    href = a["href"]
+
+    if "/an/" not in href:
         continue
 
+    # Берём ближайший контейнер объявления
+    card = a.find_parent(["article", "div", "li"])
+
+    if not card:
+        continue
+
+    text = " ".join(card.stripped_strings)
     low = text.lower()
 
     # Только 3 комнаты
-    if not re.search(r"\b3\s*[-хx]?\s*(?:ком|кім)", low):
+    if not re.search(r"\b3\s*(?:кімнат|комнат|комн|ком)\b", low):
+        continue
+
+    # Только помесячная аренда
+    if "помісячно" not in low and "помесячно" not in low:
         continue
 
     # Исключаем посуточную аренду
-    bad_words = [
+    if any(word in low for word in [
         "посуточно",
-        "посут",
+        "подобово",
         "сутки",
-        "ночь",
-        "ночь",
-        "почасово",
-        "час",
-    ]
-
-    if any(word in low for word in bad_words):
+        "почасово"
+    ]):
         continue
 
-    # Ищем цену в гривнах
-    price_match = re.search(
+    # Ищем цену
+    price_matches = re.findall(
         r"(\d[\d\s]*)\s*(?:uah|грн)",
         text,
         re.IGNORECASE
     )
 
-    if not price_match:
+    if not price_matches:
         continue
 
-    price = int(re.sub(r"\D", "", price_match.group(1)))
+    prices = []
+
+    for value in price_matches:
+        try:
+            prices.append(int(re.sub(r"\D", "", value)))
+        except ValueError:
+            pass
+
+    if not prices:
+        continue
+
+    price = min(prices)
 
     if price > 6000:
         continue
 
-    # Проверяем этаж
+    # Этаж
     floor_match = re.search(
-        r"(?:поверх|этаж)\s*(\d+)",
+        r"(?:поверх|этаж)\s*[:\-]?\s*(\d+)",
         low
     )
 
     floor = floor_match.group(1) if floor_match else "не указан"
 
-    # Ссылка
-    link = urljoin(URL, a["href"])
+    # Если явно указан 1/9, 3/9 и т.п.
+    fraction_match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", text)
 
-    # Название
-    title = text.replace("\n", " ").strip()
+    total_floors = None
+
+    if fraction_match:
+        floor = fraction_match.group(1)
+        total_floors = fraction_match.group(2)
+
+    # Не последний этаж, если известна этажность
+    if total_floors and floor.isdigit():
+        if int(floor) >= int(total_floors):
+            continue
+
+    link = urljoin(URL, href)
 
     results.append({
-        "title": title[:400],
+        "text": text[:500],
         "price": price,
         "floor": floor,
         "link": link
     })
 
 
-# Убираем дубли
+# Удаляем дубли
 unique = {}
 
 for item in results:
@@ -94,20 +122,24 @@ results = list(unique.values())
 
 
 if results:
+
     message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-    message += "Найдены варианты до 6000 грн:\n\n"
+    message += "Найдены подходящие объявления:\n\n"
 
     for item in results[:10]:
+
         message += (
-            f"🏠 {item['title']}\n"
             f"💰 {item['price']} грн\n"
             f"🏢 Этаж: {item['floor']}\n"
+            f"{item['text']}\n"
             f"🔗 {item['link']}\n\n"
         )
+
 else:
+
     message = (
         "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-        "Подходящих новых объявлений не найдено."
+        "Подходящих объявлений пока не найдено."
     )
 
 
@@ -125,9 +157,4 @@ telegram_response = requests.post(
 
 telegram_response.raise_for_status()
 
-print(f"Найдено вариантов: {len(results)}")
-print("Размер страницы:", len(response.text))
-print("Заголовок страницы:", soup.title.get_text(strip=True) if soup.title else "нет")
-print("Количество ссылок:", len(soup.find_all("a", href=True)))
-print("Фрагмент страницы:")
-print(soup.get_text(" ", strip=True)[:3000])
+print("Найдено вариантов:", len(results))
