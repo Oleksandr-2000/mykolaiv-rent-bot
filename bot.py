@@ -7,20 +7,162 @@ from urllib.parse import urljoin
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-URL = "https://makler.ua/ua/nik-nikolaev/real-estate/real-estate-for-rent/apartments-for-rent"
+LIST_URL = (
+    "https://makler.ua/ua/nik-nikolaev/"
+    "real-estate/real-estate-for-rent/apartments-for-rent"
+)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/140.0 Safari/537.36"
+    )
 }
 
-response = requests.get(URL, headers=HEADERS, timeout=30)
-response.raise_for_status()
 
-soup = BeautifulSoup(response.text, "html.parser")
+def get_page(url):
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        timeout=30
+    )
+    response.raise_for_status()
+    return BeautifulSoup(response.text, "html.parser")
 
-results = []
 
-# Ищем ссылки, которые ведут на объявления
+def get_number(text):
+    numbers = re.findall(r"\d[\d\s]*", text)
+    if not numbers:
+        return None
+
+    return int(re.sub(r"\D", "", numbers[0]))
+
+
+def check_ad(url):
+    try:
+        soup = get_page(url)
+        text = " ".join(soup.stripped_strings)
+        low = text.lower()
+
+        # Объявление должно быть активным
+        if "уже не активно" in low or "старница устарела" in low:
+            return None
+
+        # Только помесячная аренда
+        if "помісячно" not in low and "помесячно" not in low:
+            return None
+
+        # Исключаем посуточную аренду
+        bad_words = [
+            "посуточно",
+            "подобово",
+            "сутки",
+            "почасово",
+            "за ночь",
+        ]
+
+        if any(word in low for word in bad_words):
+            return None
+
+        # Только 3 комнаты
+        room_patterns = [
+            r"3\s*кімнати",
+            r"3\s*комнат",
+            r"3[- ]ком",
+            r"3х\s*кімнат",
+            r"3х\s*комнат",
+        ]
+
+        if not any(re.search(pattern, low) for pattern in room_patterns):
+            return None
+
+        # Цена
+        price_match = re.search(
+            r"Ціна\s*:\s*([\d\s]+)\s*грн",
+            text,
+            re.IGNORECASE
+        )
+
+        if not price_match:
+            price_match = re.search(
+                r"([\d\s]+)\s*грн",
+                text,
+                re.IGNORECASE
+            )
+
+        if not price_match:
+            return None
+
+        price = int(re.sub(r"\D", "", price_match.group(1)))
+
+        if price > 6000:
+            return None
+
+        # Ищем этаж
+        floor = None
+        total_floors = None
+
+        floor_match = re.search(
+            r"Поверх\s*(\d+)",
+            text,
+            re.IGNORECASE
+        )
+
+        if floor_match:
+            floor = int(floor_match.group(1))
+
+        # Проверяем варианты 3/9, 3 / 9
+        fraction = re.search(
+            r"\b(\d+)\s*/\s*(\d+)\b",
+            text
+        )
+
+        if fraction:
+            floor = int(fraction.group(1))
+            total_floors = int(fraction.group(2))
+
+        # Если этажность известна — исключаем последний этаж
+        if floor is not None and total_floors is not None:
+            if floor >= total_floors:
+                return None
+
+        title = soup.find("h1")
+
+        if title:
+            title = title.get_text(" ", strip=True)
+        else:
+            title = "3-комнатная квартира"
+
+        # Адрес
+        address = ""
+
+        street_match = re.search(
+            r"Вулиця\s+(.+?)(?:Район|Ціна|Поделиться)",
+            text,
+            re.IGNORECASE
+        )
+
+        if street_match:
+            address = street_match.group(1).strip()
+
+        return {
+            "title": title,
+            "price": price,
+            "floor": floor,
+            "address": address,
+            "url": url,
+        }
+
+    except Exception as error:
+        print("Ошибка проверки:", url, error)
+        return None
+
+
+# Получаем список объявлений
+soup = get_page(LIST_URL)
+
+links = []
+
 for a in soup.find_all("a", href=True):
 
     href = a["href"]
@@ -28,112 +170,56 @@ for a in soup.find_all("a", href=True):
     if "/an/" not in href:
         continue
 
-    # Берём ближайший контейнер объявления
-    card = a.find_parent(["article", "div", "li"])
+    full_url = urljoin(LIST_URL, href)
 
-    if not card:
-        continue
-
-    text = " ".join(card.stripped_strings)
-    low = text.lower()
-
-    # Только 3 комнаты
-    if not re.search(r"\b3\s*(?:кімнат|комнат|комн|ком)\b", low):
-        continue
-
-    # Только помесячная аренда
-    if "помісячно" not in low and "помесячно" not in low:
-        continue
-
-    # Исключаем посуточную аренду
-    if any(word in low for word in [
-        "посуточно",
-        "подобово",
-        "сутки",
-        "почасово"
-    ]):
-        continue
-
-    # Ищем цену
-    price_matches = re.findall(
-        r"(\d[\d\s]*)\s*(?:uah|грн)",
-        text,
-        re.IGNORECASE
-    )
-
-    if not price_matches:
-        continue
-
-    prices = []
-
-    for value in price_matches:
-        try:
-            prices.append(int(re.sub(r"\D", "", value)))
-        except ValueError:
-            pass
-
-    if not prices:
-        continue
-
-    price = min(prices)
-
-    if price > 6000:
-        continue
-
-    # Этаж
-    floor_match = re.search(
-        r"(?:поверх|этаж)\s*[:\-]?\s*(\d+)",
-        low
-    )
-
-    floor = floor_match.group(1) if floor_match else "не указан"
-
-    # Если явно указан 1/9, 3/9 и т.п.
-    fraction_match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", text)
-
-    total_floors = None
-
-    if fraction_match:
-        floor = fraction_match.group(1)
-        total_floors = fraction_match.group(2)
-
-    # Не последний этаж, если известна этажность
-    if total_floors and floor.isdigit():
-        if int(floor) >= int(total_floors):
-            continue
-
-    link = urljoin(URL, href)
-
-    results.append({
-        "text": text[:500],
-        "price": price,
-        "floor": floor,
-        "link": link
-    })
+    if full_url not in links:
+        links.append(full_url)
 
 
-# Удаляем дубли
-unique = {}
-
-for item in results:
-    unique[item["link"]] = item
-
-results = list(unique.values())
+print("Найдено ссылок на объявления:", len(links))
 
 
+results = []
+
+# Проверяем первые 30 объявлений
+for link in links[:30]:
+
+    ad = check_ad(link)
+
+    if ad:
+        results.append(ad)
+
+    if len(results) >= 10:
+        break
+
+
+print("Подходящих объявлений:", len(results))
+
+
+# Формируем сообщение
 if results:
 
     message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
     message += "Найдены подходящие объявления:\n\n"
 
-    for item in results[:10]:
+    for ad in results:
+
+        floor_text = (
+            str(ad["floor"])
+            if ad["floor"] is not None
+            else "не указан"
+        )
 
         message += (
-            f"💰 {item['price']} грн\n"
-            f"🏢 Этаж: {item['floor']}\n"
-            f"{item['text']}\n"
-            f"🔗 {item['link']}\n\n"
+            f"🏠 {ad['title']}\n"
+            f"💰 {ad['price']} грн/мес\n"
+            f"🏢 Этаж: {floor_text}\n"
         )
+
+        if ad["address"]:
+            message += f"📍 {ad['address']}\n"
+
+        message += f"🔗 {ad['url']}\n\n"
 
 else:
 
@@ -143,18 +229,21 @@ else:
     )
 
 
-telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+# Отправляем Telegram
+telegram_url = (
+    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+)
 
-telegram_response = requests.post(
+response = requests.post(
     telegram_url,
     json={
         "chat_id": CHAT_ID,
         "text": message,
-        "disable_web_page_preview": False
+        "disable_web_page_preview": False,
     },
-    timeout=30
+    timeout=30,
 )
 
-telegram_response.raise_for_status()
+response.raise_for_status()
 
-print("Найдено вариантов:", len(results))
+print("Сообщение отправлено в Telegram")
