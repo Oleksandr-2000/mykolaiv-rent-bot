@@ -172,7 +172,7 @@ for a in soup.find_all("a", href=True):
 if not re.search(r"/an/\d+", href):
     continue
 
-https://re.search
+
     full_url = urljoin(LIST_URL, href)
 
     if full_url not in links:
