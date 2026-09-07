@@ -9,9 +9,16 @@ CHAT_ID = os.environ["CHAT_ID"]
 
 URL = "https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent?list&region[]=17&city[]=384&city[]=372&city[]=373&city[]=374&city[]=375&city[]=376&city[]=377&city[]=378&city[]=3130&city[]=379&city[]=380&city[]=381&city[]=382&city[]=3131&city[]=3416&city[]=3132&city[]=3418&city[]=383&city[]=386&city[]=385&city[]=387&city[]=3133&city[]=388&city[]=3134&city[]=3417&city[]=389&city[]=390&currency_id=5&list=detail"
 
-headers = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-response = requests.get(URL, headers=headers, timeout=30)
+response = requests.get(
+    URL,
+    headers=HEADERS,
+    timeout=30
+)
+
 response.raise_for_status()
 
 print("HTTP:", response.status_code)
@@ -19,38 +26,25 @@ print("Размер страницы:", len(response.text))
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-articles = soup.find_all("article", id=re.compile(r"^tr_an-"))
+articles = soup.find_all(
+    "article",
+    id=re.compile(r"^tr_an-")
+)
+
 print("Найдено article:", len(articles))
-
-for article in articles:
-    title_tag = article.select_one(".ls-detail_antTitle a")
-    price_tag = article.select_one(".ls-detail_price")
-
-    if title_tag:
-        title = title_tag.get_text(" ", strip=True)
-    else:
-        title = ""
-
-    if price_tag:
-        price = price_tag.get_text(" ", strip=True)
-    else:
-        price = ""
-
-    print("ОБЪЯВЛЕНИЕ:", title)
-    print("ЦЕНА:", price)
-    print("---")
 
 results = []
 
 for article in articles:
+
     title_tag = article.select_one(".ls-detail_antTitle a")
     price_tag = article.select_one(".ls-detail_price")
     text_tag = article.select_one(".ls-detail_anText")
 
-    if title_tag:
-        title = title_tag.get_text(" ", strip=True)
-    else:
-        title = ""
+    if not title_tag:
+        continue
+
+    title = title_tag.get_text(" ", strip=True)
 
     if price_tag:
         price_text = price_tag.get_text(" ", strip=True)
@@ -62,58 +56,122 @@ for article in articles:
     else:
         description = ""
 
-    full_text = (title + " " + description).lower()
+    full_text = (
+        title + " " + description
+    ).lower()
 
-    match = re.search(r"(\d[\d\s]*)\s*(uah|грн)", price_text, re.I)
+    price_match = re.search(
+        r"([\d\s]+)\s*(uah|грн)",
+        price_text,
+        re.IGNORECASE
+    )
 
-    if match:
-        price = int(re.sub(r"\D", "", match.group(1)))
-    else:
-        price = 0
+    if not price_match:
+        continue
 
-    room_ok = "3х кімнатну" in full_text
-    room_ok = room_ok or "3-х кімнатну" in full_text
-    room_ok = room_ok or "3 кімнатну" in full_text
-    room_ok = room_ok or "3-комнатную" in full_text
-    room_ok = room_ok or "3 комнатную" in full_text
-    room_ok = room_ok or "3-х комнатную" in full_text
-    room_ok = room_ok or "3х комнатную" in full_text
-
-    daily = "посуточно" in full_text
-    daily = daily or "подобово" in full_text
-    daily = daily or "за сутки" in full_text
-    daily = daily or "за ночь" in full_text
-    daily = daily or "на ночь" in full_text
-
-    if price <= 6000 and price > 0 and room_ok and not daily:
-        href = title_tag.get("href", "")
-        link = urljoin(URL, href)
-
-        results.append(
-            title + "\n"
-            + "💰 " + str(price) + " грн\n"
-            + "📝 " + description + "\n"
-            + "🔗 " + link
+    price = int(
+        re.sub(
+            r"\D",
+            "",
+            price_match.group(1)
         )
+    )
+
+    if price <= 0 or price > 6000:
+        continue
+
+    room_ok = False
+
+    room_patterns = [
+        "3х кімнатну",
+        "3-х кімнатну",
+        "3 кімнатну",
+        "3-комнатную",
+        "3 комнатную",
+        "3-х комнатную",
+        "3х комнатную",
+        "3-комнатная",
+        "3 комнатная",
+        "3-к.",
+        "3-к ",
+        "3 к/к",
+        "3-к/к"
+    ]
+
+    for pattern in room_patterns:
+        if pattern in full_text:
+            room_ok = True
+            break
+
+    if not room_ok:
+        continue
+
+    daily_words = [
+        "посуточно",
+        "подобово",
+        "за сутки",
+        "за ночь",
+        "на ночь",
+        "посуточная",
+        "посуточное"
+    ]
+
+    is_daily = False
+
+    for word in daily_words:
+        if word in full_text:
+            is_daily = True
+            break
+
+    if is_daily:
+        continue
+
+    href = title_tag.get("href", "")
+
+    link = urljoin(
+        "https://makler.ua",
+        href
+    )
+
+    results.append(
+        "🏠 " + title
+        + "\n💰 " + str(price) + " грн"
+        + "\n📝 " + description
+        + "\n🔗 " + link
+    )
 
 print("Подходящих объявлений:", len(results))
 
 if results:
-    message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-    message += "Найдены подходящие объявления:\n\n"
-    message += "\n\n".join(results)
+
+    message = (
+        "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+        "Найдены подходящие объявления:\n\n"
+        + "\n\n".join(results)
+    )
+
 else:
-    message = "🏠 НИКОЛАЕВ АРЕНДА\n\n"
-    message += "Подходящих объявлений пока не найдено."
 
-telegram_url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage"
+    message = (
+        "🏠 НИКОЛАЕВ АРЕНДА\n\n"
+        "Подходящих объявлений пока не найдено."
+    )
 
-telegram = requests.post(
+telegram_url = (
+    "https://api.telegram.org/bot"
+    + BOT_TOKEN
+    + "/sendMessage"
+)
+
+telegram_response = requests.post(
     telegram_url,
-    json={"chat_id": CHAT_ID, "text": message},
+    json={
+        "chat_id": CHAT_ID,
+        "text": message
+    },
     timeout=30
 )
 
-telegram.raise_for_status()
+telegram_response.raise_for_status()
 
 print("Сообщение отправлено в Telegram")
