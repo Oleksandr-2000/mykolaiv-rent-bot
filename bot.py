@@ -1,33 +1,29 @@
 import requests
 from bs4 import BeautifulSoup
 
-url = "https://makler.ua/ua/real-estate/real-estate-for-rent/apartments-for-rent/nikolaev_106/"
+url = "https://makler.ua/"
 
 response = requests.get(
     url,
-    headers={
-        "User-Agent": "Mozilla/5.0"
-    },
+    headers={"User-Agent": "Mozilla/5.0"},
     timeout=30
 )
 
 print("HTTP:", response.status_code)
-print("Размер страницы:", len(response.text))
+print("Размер:", len(response.text))
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-articles = soup.find_all("article")
+for a in soup.find_all("a", href=True):
 
-print("Найдено article:", len(articles))
+    text = a.get_text(" ", strip=True).lower()
+    href = a["href"]
 
-for article in articles[:5]:
-    title = article.select_one(".ls-detail_antTitle")
-    price = article.select_one(".ls-detail_price")
+    if "микола" in text or "микол" in href.lower():
 
-    if title:
-        print("Название:", title.get_text(" ", strip=True))
-
-    if price:
-        print("Цена:", price.get_text(" ", strip=True))
-
-    print("---")
+        print(
+            "НАЙДЕНО:",
+            text[:100],
+            "=>",
+            href
+        )
