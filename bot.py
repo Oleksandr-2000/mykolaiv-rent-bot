@@ -8,8 +8,8 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 LIST_URL = (
-    "https://makler.ua/ua/nik-nikolaev/"
-    "real-estate/real-estate-for-rent/apartments-for-rent"
+    "https://www.olx.ua/nedvizhimost/kvartiry/"
+    "dolgosrochnaya-arenda-kvartir/3-kmnati/nikolaev_106/"
 )
 
 HEADERS = {
