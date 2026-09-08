@@ -642,18 +642,10 @@ if __name__ == "__main__":
     print(
         "Запуск плановой проверки сайтов..."
     )
-
+    check_makler() 
+    check_olx() 
     # Проверяем рабочее время
-    if is_work_time():
-
-        check_makler()
-        check_olx()
-
-    else:
-
-        print(
-            "Проверка объявлений пропущена."
-        )
+    
 
     # =========================
     # ТЕСТ TELEGRAM
