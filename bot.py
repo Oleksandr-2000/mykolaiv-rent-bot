@@ -295,43 +295,42 @@ def check_makler():
 
     except Exception as e:
         print(f"Ошибка в модуле Makler: {e}")
-    def check_olx():
-        global sent_olx_ads
+   def check_olx():
+    global sent_olx_ads
 
-        try:
-            response = requests.get(
-                OLX_RSS_URL,
-                headers=ZAGOLOVKI,
-                timeout=30
+    try:
+        response = requests.get(
+            OLX_RSS_URL,
+            headers=ZAGOLOVKI,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            print(
+                f"Google шлюз вернул ошибку, статус: "
+                f"{response.status_code}"
             )
+            return
 
-            if response.status_code != 200:
-               print(
-                    f"Google шлюз вернул ошибку, статус: "
-                    f"{response.status_code}"
-                )
-                    return
+        soup = BeautifulSoup(
+            response.content,
+            "lxml-xml"
+        )
 
-            soup = BeautifulSoup(
-                response.content,
-                "lxml-xml"
-            )
-
-            items = soup.find_all("item")
-            results_olx = []
+        items = soup.find_all("item")
+        results_olx = []
 
         print(
             f"Лента OLX успешно получена через шлюз Google! "
             f"Найдено объектов: {len(items)}"
         )
 
-            for item in reversed(items):
-
-                title = (
-                    item.find("title").text
-                    if item.find("title")
-                    else ""
-        )
+        for item in reversed(items):
+            title = (
+                item.find("title").text
+                if item.find("title")
+                else ""
+            )
 
             link = (
                 item.find("link").text
@@ -423,26 +422,6 @@ def check_makler():
 
         if results_olx:
             message = (
-                "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:\n\n"
-                + "\n\n---\n\n".join(results_olx)
-            )
-
-            send_telegram_message(message)
-
-            save_cache(
-                OLX_CACHE,
-                sent_olx_ads
-            )
-
-        else:
-            print(
-                "Новых подходящих объявлений на OLX пока нет."
-            )
-
-        except Exception as e:
-            print(
-                f"Ошибка в модуле OLX: {e}"
-            )
         f name == "main":
     print("Запуск плановой проверки сайтов...")
 
