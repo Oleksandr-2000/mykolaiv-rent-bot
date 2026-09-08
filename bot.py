@@ -36,7 +36,7 @@ MAKLER_URL = (
 # OLX
 # =========================
 
-OLX_RSS_URL = "ВСТАВЬ_СЮДА_ССЫЛКУ_ОЛХ_ШЛЮЗА"
+OLX_RSS_URL = "⁨https://script.google.com/macros/s/AKfycby_8mCZPtu7jTBP2FdR-rkhKeA5PgApR2CvCsM9x1G7xLfSwNhmVq16n63zsCvVo3uQew/exec"
 
 
 # =========================
