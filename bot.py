@@ -307,8 +307,8 @@ def check_makler():
 
         if response.status_code != 200:
             print(
-                f"Google шлюз вернул ошибку, статус: "
-                f"{response.status_code}"
+                f"Google шлюз вернул ошибку, "
+                f"статус: {response.status_code}"
             )
             return
 
@@ -326,21 +326,25 @@ def check_makler():
         )
 
         for item in reversed(items):
+            title_tag = item.find("title")
+            link_tag = item.find("link")
+            description_tag = item.find("description")
+
             title = (
-                item.find("title").text
-                if item.find("title")
+                title_tag.text.strip()
+                if title_tag
                 else ""
             )
 
             link = (
-                item.find("link").text
-                if item.find("link")
+                link_tag.text.strip()
+                if link_tag
                 else ""
             )
 
             description = (
-                item.find("description").text
-                if item.find("description")
+                description_tag.text.strip()
+                if description_tag
                 else ""
             )
 
@@ -397,28 +401,31 @@ def check_makler():
             if not room_ok:
                 continue
 
-            if clean_link not in sent_olx_ads:
-                sent_olx_ads.add(clean_link)
+            if clean_link in sent_olx_ads:
+                continue
 
-                price_search = re.search(
-                    r"(\d[\d\s])\s(грн|uah)",
-                    title,
-                    re.IGNORECASE
-                )
+            sent_olx_ads.add(clean_link)
 
+            price_search = re.search(
+                r"(\d[\d\s])\s(грн|uah)",
+                title,
+                re.IGNORECASE
+            )
+
+            if price_search:
                 price_str = (
                     f"{price_search.group(1).strip()} грн"
-                    if price_search
-                    else "Цена указана на сайте"
                 )
+            else:
+                price_str = "Цена указана на сайте"
 
-                card = (
-                    f"🏠 {title}\n"
-                    f"💵 {price_str}\n"
-                    f"🔗 [Открыть на OLX]({clean_link})"
-                )
+            card = (
+                f"🏠 {title}\n"
+                f"💵 {price_str}\n"
+                f"🔗 [Открыть на OLX]({clean_link})"
+            )
 
-                results_olx.append(card)
+            results_olx.append(card)
 
         if results_olx:
             message = (
@@ -426,33 +433,27 @@ def check_makler():
                 + "\n\n---\n\n".join(results_olx)
             )
 
-            if send_telegram_message(message):
-                save_cache(
-                    OLX_CACHE,
-                    sent_olx_ads
-                )
-
+            send_telegram_message(message)
+            save_cache(
+                OLX_CACHE,
+                sent_olx_ads
+            )
         else:
             print(
-                "Новых подходящих объявлений на OLX пока нет."
+                "Новых подходящих объявлений "
+                "на OLX пока нет."
             )
 
     except Exception as e:
         print(
             f"Ошибка в модуле OLX: {e}"
         )
-```
 
-После этого не меняй ничего ниже.
 
-Сразу после последнего:
-
-python
-        print(
-            f"Ошибка в модуле OLX: {e}"
-        )
-        f name == "main":
-    print("Запуск плановой проверки сайтов...")
+if name == "main":
+    print(
+        "Запуск плановой проверки сайтов..."
+    )
 
     check_makler()
     check_olx()
