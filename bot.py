@@ -1,22 +1,10 @@
-name: Telegram Test
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 */2 * * *"
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+import os
+import re
+import json
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
       - name: Install Python dependencies
         run: |
