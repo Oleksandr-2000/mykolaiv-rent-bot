@@ -9,19 +9,19 @@ from urllib.parse import urljoin
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# URL для Makler (из вашего кода)
+# URL для Makler
 MAKLER_URL = "https://makler.ua[]=17&city[]=384&city[]=372&city[]=373&city[]=374&city[]=375&city[]=376"
 
-# URL для OLX (RSS-лента: Николаев, 3 комнаты, до 6000 грн)
+# URL для OLX (RSS-лента)
 OLX_RSS_URL = "https://olx.ua"
 
 ZAGOLOVKI = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# Глобальные множества для отслеживания отправленного жилья, чтобы не спамить дублями
-отправленные_маstatus = set()
-отправленные_olx = set()
+# Глобальные множества для отслеживания отправленного жилья
+sent_makler_ads = set()
+sent_olx_ads = set()
 
 def send_telegram_message(message_text):
     """Единая функция для отправки уведомлений в Telegram чат"""
@@ -31,143 +31,133 @@ def send_telegram_message(message_text):
         "text": message_text
     }
     try:
-        ответ_телеграмма = requests.post(telegram_url, json=payload, timeout=30)
-        ответ_телеграмма.raise_for_status()
+        response_tg = requests.post(telegram_url, json=payload, timeout=30)
+        response_tg.raise_for_status()
     except Exception as e:
         print(f"Ошибка отправки сообщения: {e}")
 
 def check_makler():
-    """Полная оригинальная логика парсинга Makler с вашими фильтрами"""
+    """Логика парсинга Makler с вашими оригинальными фильтрами"""
     try:
-        ответ = requests.get(MAKLER_URL, headers=ZAGOLOVKI, timeout=30)
-        ответ.raise_for_status()
+        response = requests.get(MAKLER_URL, headers=ZAGOLOVKI, timeout=30)
+        response.raise_for_status()
         
-        print("Найти статью:", ответ.status_code)
-        суп = BeautifulSoup(ответ.text, "html.parser")
+        print("Найти статью (статус):", response.status_code)
+        soup = BeautifulSoup(response.text, "html.parser")
         
-        # Поиск блоков по вашему регулярному выражению для класса tr_an-
-        статьи = суп.find_all("article", id=re.compile(r"^tr_an-"))
-        print("Найти статью:", len(статьи))
+        articles = soup.find_all("article", id=re.compile(r"^tr_an-"))
+        print("Найти статью (кол-во):", len(articles))
         
-        результаты = []
+        results = []
         
-        for статья in статьи:
-            заголовок_тег = статья.select_one(".ls-detail_antTitle a")
-            ценник = статья.select_one(".ls-detail_price")
-            текстовый_тег = статья.select_one(".ls-detail_anText")
+        for article in articles:
+            title_tag = article.select_one(".ls-detail_antTitle a")
+            price_tag = article.select_one(".ls-detail_price")
+            text_tag = article.select_one(".ls-detail_anText")
             
-            if not заголовок_тег:
+            if not title_tag:
                 continue
                 
-            заголовок = заголовок_тег.get_text(" ", strip=True)
+            title = title_tag.get_text(" ", strip=True)
+            price_text = price_tag.get_text(" ", strip=True) if price_tag else ""
+            description = text_tag.get_text(" ", strip=True) if text_tag else ""
             
-            цена_текст = ценник.get_text(" ", strip=True) if ценник else ""
-            описание = текстовый_тег.get_text(" ", strip=True) if текстовый_тег else ""
+            full_text = (title + " " + description).lower()
             
-            полный_текст = (заголовок + " " + описание).lower()
-            
-            # Проверка цены регулярным выражением
-            цена_соответствие = re.search(r"([\d\s]+)\s*(uah|грн)", цена_текст, re.IGNORECASE)
-            if not цена_соответствие:
+            price_match = re.search(r"([\d\s]+)\s*(uah|грн)", price_text, re.IGNORECASE)
+            if not price_match:
                 continue
                 
-            цена = int(re.sub(r"\D", "", цена_соответствие.group(1)))
+            price = int(re.sub(r"\D", "", price_match.group(1)))
             
-            # Фильтр цены от 0 до 6000 грн
-            if цена <= 0 or цена > 6000:
+            if price <= 0 or price > 6000:
                 continue
                 
-            # Проверка шаблонов комнат (строго 3-комнатные)
-            комната_ok = False
-            шаблоны_комнат = [
+            room_ok = False
+            room_templates = [
                 "3х кімнатну", "3-х кімнатну", "3 кімнатну", "3-комнатная",
                 "3 комнатная", "3-х комнатная", "3х комнатная", "3-комнатная",
                 "3-комнатная", "3-к.", "3-к", "3 к/к", "3-к/к"
             ]
-            for шаблон in шаблоны_комнат:
-                if шаблон in полный_текст:
-                    комната_ok = True
+            for template in room_templates:
+                if template in full_text:
+                    room_ok = True
                     break
                     
-            if not комната_ok:
+            if not room_ok:
                 continue
                 
-            # Исключение посуточных ключевых слов
-            ежедневные_слова = ["посуная", "тестирование", "за сутки", "за ночь", "на ночь", "посуарный", "посуточное", "посуточно", "доба"]
+            daily_words = ["посуная", "тестирование", "за сутки", "за ночь", "на ночь", "посуарный", "посуточное", "посуточно", "доба"]
             is_daily = False
-            for слово in ежедневные_слова:
-                if слово in полный_текст:
+            for word in daily_words:
+                if word in full_text:
                     is_daily = True
                     break
                     
             if is_daily:
                 continue
                 
-            # Сбор ссылки объявления
-            href = заголовок_тег.get("href", "")
-            связь = urljoin("https://makler.ua", href)
+            href = title_tag.get("href", "")
+            link = urljoin("https://makler.ua", href)
             
-            # Если это абсолютно новая ссылка, которой не было в отправленных
-            if связь not in отправленные_маstatus:
-                отправленные_маstatus.add(связь)
+            if link not in sent_makler_ads:
+                sent_makler_ads.add(link)
+                card = f"🏠 {title}\n💵 {price} грн\n📄 {description}\n🔗 {link}"
+                results.append(card)
                 
-                # Формируем структуру карточки как на ваших скриншотах
-                карточка = f"🏠 {заголовок}\n💵 {цена} грн\n📄 {описание}\n🔗 {связь}"
-                результаты.append(карточка)
-                
-        print("Подходящие объявления:", len(результаты))
+        print("Подходящие объявления Makler:", len(results))
         
-        if результаты:
-            сообщение = "🏠 НИКОЛАЕВ АРЕНДА\n\nНайдены подходящие объявления:\n\n" + "\n\n".join(результаты)
-            send_telegram_message(сообщение)
+        if results:
+            message = "🏠 НИКОЛАЕВ АРЕНДА\n\nНайдены подходящие объявления:\n\n" + "\n\n".join(results)
+            send_telegram_message(message)
             
     except Exception as e:
         print(f"Ошибка в модуле Makler: {e}")
 
 def check_olx():
-    """Новый изолированный модуль парсинга OLX через RSS"""
+    """Изолированный модуль парсинга OLX через RSS"""
     try:
-        ответ = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
-        if ответ.status_code != 200:
+        response = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
+        if response.status_code != 200:
+            print(f"OLX вернул статус: {response.status_code}")
             return
             
-        суп = BeautifulSoup(ответ.content, "xml")
-        объявления = суп.find_all("item")
+        soup = BeautifulSoup(response.content, "xml")
+        items = soup.find_all("item")
         
-        результаты_olx = []
+        results_olx = []
         
-        # Проверяем от старых к свежим
-        for объявление in reversed(объявления):
-            заголовок = объявление.find("title").text if объявление.find("title") else ""
-            ссылка = объявление.find("link").text if объявление.find("link") else ""
-            описание = объявление.find("description").text if объявление.find("description") else ""
+        for item in reversed(items):
+            title = item.find("title").text if item.find("title") else ""
+            link = item.find("link").text if item.find("link") else ""
+            description = item.find("description").text if item.find("description") else ""
             
-            if not ссылка:
+            if not link:
                 continue
                 
-            чистая_ссылка = ссылка.split("#")[0]
-            весь_текст = (заголовок + " " + описание).lower()
+            clean_link = link.split("#")[0]
+            full_text = (title + " " + description).lower()
             
-            # Фильтр стоп-слов для OLX (посуточно и "сниму жилье")
-            стоп_слова = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "ищу 3"]
-            if any(слово in весь_текст for слово в стоп_слова):
+            stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "ищу 3"]
+            if any(word in full_text for word in stop_words):
                 continue
                 
-            if чистая_ссылка not in отправленные_olx:
-                отправленные_olx.add(чистая_ссылка)
+            if clean_link not in sent_olx_ads:
+                sent_olx_ads.add(clean_link)
                 
-                # Поиск цены в тексте объявления на OLX RSS
-                цена_поиск = re.search(r"(\d[\d\s]*)\s*(грн|uah)", заголовок, re.IGNORECASE)
-                цена_стр = "Цена указана на сайте"
-                if цена_поиск:
-                    цена_стр = f"{цена_поиск.group(1).strip()} грн"
+                price_search = re.search(r"(\d[\d\s]*)\s*(грн|uah)", title, re.IGNORECASE)
+                price_str = "Цена указана на сайте"
+                if price_search:
+                    price_str = f"{price_search.group(1).strip()} грн"
                 
-                карточка = f"🏠 {заголовок}\n💵 {цена_стр}\n🔗 {чистая_ссылка}"
-                результаты_olx.append(карточка)
+                card = f"🏠 {title}\n💵 {price_str}\n🔗 {clean_link}"
+                results_olx.append(card)
                 
-        if результаты_olx:
-            сообщение = "🏠 НИКОЛАЕВ АРЕНДА (OLX)\n\nНайдены новые объекты:\n\n" + "\n\n".join(результаты_olx)
-            send_telegram_message(сообщение)
+        print("Подходящие объявления OLX:", len(results_olx))
+        
+        if results_olx:
+            message = "🏠 НИКОЛАЕВ АРЕНДА (OLX)\n\nНайдены новые объекты:\n\n" + "\n\n".join(results_olx)
+            send_telegram_message(message)
             
     except Exception as e:
         print(f"Ошибка в модуле OLX: {e}")
@@ -175,13 +165,11 @@ def check_olx():
 if __name__ == "__main__":
     print("Бот запущен. Выполняется первичный сбор текущих объявлений...")
     
-    # Первые вызовы заполнят базу отправленных ссылок, чтобы не присылать старые дубли
     check_makler()
     check_olx()
     
-    # Бесконечный цикл проверки каждые 10 минут
     while True:
         print("Плановая проверка обновлений на сайтах...")
         check_makler()
         check_olx()
-        time.sleep(600)  # 600 секунд = 10 минут
+        time.sleep(600)  # Проверка каждые 10 минут
