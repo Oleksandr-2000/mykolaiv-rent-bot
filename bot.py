@@ -521,9 +521,6 @@ def check_olx():
                 "посуточно",
                 "доба",
                 "добово",
-                "за сутки",
-                "за ночь",
-                "на ночь",
                 "сниму",
                 "шукаю",
                 "ищу квартиру",
@@ -534,6 +531,9 @@ def check_olx():
                 word in full_text
                 for word in stop_words
             (sad)
+                continue
+
+            room_ok = False
                 continue
 
             # -------------------------
