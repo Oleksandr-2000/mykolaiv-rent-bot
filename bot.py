@@ -37,7 +37,7 @@ sent_olx_ads = load_cache(OLX_CACHE)
 def send_telegram_message(message_text):
     """ИСПРАВЛЕННАЯ НА 100% ФУНКЦИЯ ОТПРАВКИ"""
     # Теперь адрес полностью официальный и корректный:
-    telegram_url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    telegram_url = f"https://api.telegram.org{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
         "text": message_text,
