@@ -8,10 +8,11 @@ from bs4 import BeautifulSoup
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# Закодированный безопасный URL для Makler (чтобы не ломались скобки [])
+# Безопасный URL для Makler Николаев
 MAKLER_URL = "https://makler.ua"
 
-# Чистая RSS ссылка на OLX
+# РАСШИРЕННЫЙ URL ДЛЯ OLX: убрали фильтр комнат, ищем вообще ВСЕ квартиры в Николаеве до 6000 грн,
+# чтобы код сам находил скрытые 3-комнатные варианты, которые отсеивал сайт.
 OLX_RSS_URL = "https://olx.ua"
 
 MAKLER_CACHE = "makler_cache.txt"
@@ -106,8 +107,6 @@ def check_makler():
             message = "🏠 *НОВЫЕ ОБЪЯВЛЕНИЯ НА MAKLER:*\n\n" + "\n\n---\n\n".join(results)
             send_telegram_message(message)
             save_cache(MAKLER_CACHE, sent_makler_ads)
-        else:
-            print("Новых объявлений на Makler пока нет.")
             
     except Exception as e:
         print(f"Ошибка в модуле Makler: {e}")
@@ -122,12 +121,11 @@ def check_olx():
             print(f"Отказ OLX RSS, статус: {response.status_code}")
             return
             
-        # Используем парсер lxml для корректного чтения XML структуры OLX
         soup = BeautifulSoup(response.content, "lxml-xml")
         items = soup.find_all("item")
         results_olx = []
         
-        print(f"OLX RSS успешно прочитан. Найдено объявлений в ленте: {len(items)}")
+        print(f"OLX RSS успешно прочитан. Найдено объявлений в ленте общего поиска: {len(items)}")
         
         for item in reversed(items):
             title = item.find("title").text if item.find("title") else ""
@@ -137,11 +135,26 @@ def check_olx():
             if not link:
                 continue
                 
-            clean_link = link.split("#")
+            clean_link = link.split("#")[0]
             full_text = (title + " " + description).lower()
             
+            # Исключаем посуточные и поиск жилья
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
             if any(word in full_text for word in stop_words):
+                continue
+                
+            # Глубокий текстовый фильтр комнат внутри Python (ищет шаблоны 3-к, а также фразы типа "2-3")
+            room_ok = False
+            room_templates = [
+                "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
+                "3-х комн", "3х комн", "3-х кімн", "3х кімн", "3-кімн", "3 кімн", "2-3"
+            ]
+            for template in room_templates:
+                if template in full_text:
+                    room_ok = True
+                    break
+                    
+            if not room_ok:
                 continue
                 
             if clean_link not in sent_olx_ads:
@@ -157,8 +170,6 @@ def check_olx():
             message = "🏠 *НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:*\n\n" + "\n\n---\n\n".join(results_olx)
             send_telegram_message(message)
             save_cache(OLX_CACHE, sent_olx_ads)
-        else:
-            print("Новых объявлений на OLX пока нет.")
             
     except Exception as e:
         print(f"Ошибка в модуле OLX: {e}")
