@@ -10,8 +10,9 @@ CHAT_ID = os.environ["CHAT_ID"]
 # Безопасный URL для Makler Николаев
 MAKLER_URL = "https://makler.ua"
 
-# Расширенный URL для OLX без жесткого фильтра комнат сайта
-OLX_RSS_URL = "https://olx.ua"
+# Используем надежное внешнее зеркало-декодер для RSS-ленты OLX.
+# Оно забирает данные напрямую, минуя любые блокировки 403 и Cloudflare на GitHub.
+OLX_RSS_URL = "https://rss2json.com"
 
 ZAGOLOVKI = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -117,32 +118,21 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
-        # Используем альтернативный CORS-прокси без искажения протокола url
-        безопасный_url = f"https://allorigins.win{requests.utils.quote(OLX_RSS_URL)}"
-        response = requests.get(безопасный_url, headers=ZAGOLOVKI, timeout=30)
-        
+        response = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
         if response.status_code != 200:
-            print(f"Прокси недоступен, статус: {response.status_code}")
+            print(f"Зеркало OLX вернуло ошибку, статус: {response.status_code}")
             return
             
-        # Извлекаем XML контент из JSON-ответа прокси сервера
         данные_json = response.json()
-        xml_content = данные_json.get("contents", "")
-        
-        if not xml_content:
-            print("Прокси вернул пустой контент.")
-            return
-
-        soup = BeautifulSoup(xml_content, "lxml-xml")
-        items = soup.find_all("item")
+        items = данные_json.get("items", [])
         results_olx = []
         
-        print(f"OLX RSS успешно прочитан через прокси. Найдено объявлений: {len(items)}")
+        print(f"OLX RSS успешно прочитан через декодер. Найдено объявлений: {len(items)}")
         
         for item in reversed(items):
-            title = item.find("title").text if item.find("title") else ""
-            link = item.find("link").text if item.find("link") else ""
-            description = item.find("description").text if item.find("description") else ""
+            title = item.get("title", "")
+            link = item.get("link", "")
+            description = item.get("description", "")
             
             if not link:
                 continue
@@ -154,11 +144,11 @@ def check_olx():
             if any(word in full_text for word in stop_words):
                 continue
                 
-            # Ищем любые упоминания 3 комнат или текстовых шаблонов "2-3"
+            # Проверяем текстовые шаблоны для 3 комнат, включая варианты типа "2-3"
             room_ok = False
             room_templates = [
                 "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
-                "3-х комн", "3х комн", "3-х кін", "3х кімн", "3-кімн", "3 кімн", "2-3"
+                "3-х комн", "3х комн", "3-х кімн", "3х кімн", "3-кімн", "3 кімн", "2-3"
             ]
             for template in room_templates:
                 if template in full_text:
