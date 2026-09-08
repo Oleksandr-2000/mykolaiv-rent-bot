@@ -1,467 +1,80 @@
-import os
-import re
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
-from zoneinfo import ZoneInfo
+name: Telegram Test
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */2 * * *"
 
-# =========================
-# НАСТРОЙКИ
-# =========================
+jobs:
+  test:
+    runs-on: ubuntu-latest
 
-BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
-CHAT_ID = os.environ["CHAT_ID"].strip()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-# =========================
-# MAKLER
-# =========================
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-MAKLER_URL = (
-    "https://makler.ua/ua/real-estate/"
-    "real-estate-for-rent/apartments-for-rent"
-    "?list&region[]=17&city[]=384&city[]=372&city[]=373"
-    "&city[]=374&city[]=375&city[]=376&city[]=377"
-    "&city[]=378&city[]=3130&city[]=379&city[]=380"
-    "&city[]=381&city[]=382&city[]=3131&city[]=3416"
-    "&city[]=3132&city[]=3418&city[]=383&city[]=386"
-    "&city[]=385&city[]=387&city[]=3133&city[]=388"
-    "&city[]=3134&city[]=3417&city[]=389&city[]=390"
-    "&currency_id=5&list=detail"
-)
+      - name: Install Chromium
+        run: |
+          python -m playwright install --with-deps chromium
 
+      - name: Run Telegram bot
+        run: python bot.py
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+# ============================================================
+# ПАРСИНГ OLX
+# ============================================================
 
-# =========================
-# OLX
-# =========================
+def parse_olx(html):
+    if not html:
+        return []
 
-OLX_RSS_URL = "https://script.google.com/macros/s/AKfycbzvv39471cRMGiuqJChandkIz0ns61FUuzg8jBJ0nWuGseoOubTaUqtZ9YH3VakQ-IYxg/exec"
-
-
-# =========================
-# HEADERS
-# =========================
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+    soup = BeautifulSoup(
+        html,
+        "html.parser"
     )
-}
 
+    results = []
 
-# =========================
-# КЭШ
-# =========================
-
-MAKLER_CACHE = "makler_cache.txt"
-OLX_CACHE = "olx_cache.txt"
-
-
-def load_cache(filename):
-
-    if os.path.exists(filename):
-
-        with open(
-            filename,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return {
-                line.strip()
-                for line in f
-                if line.strip()
-            }
-
-    return set()
-
-
-def save_cache(filename, cache_set):
-
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        for item in cache_set:
-            f.write(item + "\n")
-
-
-sent_makler_ads = load_cache(
-    MAKLER_CACHE
-)
-
-sent_olx_ads = load_cache(
-    OLX_CACHE
-)
-
-
-# =========================
-# ВРЕМЯ УКРАИНЫ
-# =========================
-
-def is_work_time():
-
-    now = datetime.now(
-        ZoneInfo("Europe/Kyiv")
+    # Ищем карточки объявлений
+    cards = soup.find_all(
+        "div",
+        attrs={
+            "data-cy": "l-card"
+        }
     )
 
     print(
-        "Украинское время:",
-        now.strftime("%Y-%m-%d %H:%M:%S")
+        "OLX: найдено карточек:",
+        len(cards)
     )
 
-    if 8 <= now.hour < 18:
+    for card in cards:
 
-        return True
+        try:
+            # ------------------------------------------------
+            # НАЗВАНИЕ
+            # ------------------------------------------------
 
-    print(
-        "Сейчас вне рабочего времени "
-        "08:00-18:00."
-    )
-
-    return False
-
-
-# =========================
-# TELEGRAM
-# =========================
-
-def send_telegram_message(message_text):
-
-    telegram_url = (
-        f"https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
-    )
-
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message_text,
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": False
-    }
-
-    try:
-
-        response = requests.post(
-            telegram_url,
-            json=payload,
-            timeout=30
-        )
-
-        print(
-            "Telegram HTTP:",
-            response.status_code
-        )
-
-        print(
-            "Telegram ответ:",
-            response.text
-        )
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        if not data.get("ok"):
-
-            print(
-                "Telegram вернул ошибку:",
-                data
-            )
-
-            return False
-
-        print(
-            "Сообщение успешно отправлено "
-            "в Telegram"
-        )
-
-        return True
-
-    except Exception as e:
-
-        print(
-            "Ошибка отправки сообщения "
-            "в Telegram:",
-            e
-        )
-
-        return False
-        # =========================
-# MAKLER
-# =========================
-
-def check_makler():
-
-    global sent_makler_ads
-
-    try:
-
-        response = requests.get(
-            MAKLER_URL,
-            headers=HEADERS,
-            timeout=30
-        )
-
-        response.raise_for_status()
-
-        soup = BeautifulSoup(
-            response.text,
-            "html.parser"
-        )
-
-        articles = soup.find_all(
-            "article",
-            id=re.compile(r"^tr_an-")
-        )
-
-        results = []
-
-        print(
-            f"Makler: найдено объектов: "
-            f"{len(articles)}"
-        )
-
-        for article in articles:
-
-            title_tag = article.select_one(
-                ".ls-detail_antTitle a"
-            )
-
-            price_tag = article.select_one(
-                ".ls-detail_price"
-            )
-
-            text_tag = article.select_one(
-                ".ls-detail_anText"
+            title_tag = card.find(
+                "h4"
             )
 
             if not title_tag:
-                continue
-
-            title = title_tag.get_text(
-                " ",
-                strip=True
-            )
-
-            price_text = (
-                price_tag.get_text(
-                    " ",
-                    strip=True
+                title_tag = card.find(
+                    "h6"
                 )
-                if price_tag
-                else ""
-            )
-
-            description = (
-                text_tag.get_text(
-                    " ",
-                    strip=True
-                )
-                if text_tag
-                else ""
-            )
-
-            full_text = (
-                title + " " + description
-            ).lower()
-
-            # =========================
-            # ЦЕНА
-            # =========================
-
-            price_match = re.search(
-                r"([\d\s]+)\s*(uah|грн)",
-                price_text,
-                re.IGNORECASE
-            )
-
-            if not price_match:
-                continue
-
-            price = int(
-                re.sub(
-                    r"\D",
-                    "",
-                    price_match.group(1)
-                )
-            )
-
-            if price <= 0 or price > 6000:
-                continue
-
-            # =========================
-            # 3 КОМНАТЫ
-            # =========================
-
-            room_templates = [
-                "3х кімнатну",
-                "3-х кімнатну",
-                "3 кімнатну",
-                "3-комнатная",
-                "3 комнатная",
-                "3-х комнатная",
-                "3х комнатная",
-                "3-комн",
-                "3 комн",
-                "3-к.",
-                "3-к",
-                "3 к/к",
-                "3-к/к"
-            ]
-
-            room_ok = any(
-                template in full_text
-                for template in room_templates
-            )
-
-            if not room_ok:
-                continue
-
-            # =========================
-            # ИСКЛЮЧАЕМ ПОСУТОЧНО
-            # =========================
-
-            daily_words = [
-                "посуная",
-                "тестирование",
-                "за сутки",
-                "за ночь",
-                "на ночь",
-                "посуарный",
-                "посуточное",
-                "посуточно",
-                "доба",
-                "добово"
-            ]
-
-            if any(
-                word in full_text
-                for word in daily_words
-            ):
-                continue
-
-            # =========================
-            # ССЫЛКА
-            # =========================
-
-            href = title_tag.get(
-                "href",
-                ""
-            )
-
-            link = (
-                f"https://makler.ua{href}"
-                if href.startswith("/")
-                else href
-            )
-
-            if not link:
-                continue
-
-            # =========================
-            # ПРОВЕРКА КЭША
-            # =========================
-
-            if link in sent_makler_ads:
-                continue
-
-            sent_makler_ads.add(link)
-
-            card = (
-                f"🏠 {title}\n"
-                f"💵 {price} грн\n"
-                f"📄 {description}\n"
-                f"🔗 [Открыть на Makler]({link})"
-            )
-
-            results.append(card)
-
-        # =========================
-        # ОТПРАВКА В TELEGRAM
-        # =========================
-
-        if results:
-
-            message = (
-                "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА MAKLER:\n\n"
-                + "\n\n---\n\n".join(results)
-            )
-
-            if send_telegram_message(message):
-
-                save_cache(
-                    MAKLER_CACHE,
-                    sent_makler_ads
-                )
-
-        else:
-
-            print(
-                "Новых подходящих объявлений "
-                "на Makler пока нет."
-            )
-
-    except Exception as e:
-
-        print(
-            f"Ошибка в модуле Makler: {e}"
-        )
-        # =========================
-# OLX
-# =========================
-
-def check_olx():
-
-    global sent_olx_ads
-
-    try:
-
-        if not OLX_RSS_URL:
-            print(
-                "OLX_RSS_URL не указан."
-            )
-            return
-
-        response = requests.get(
-            OLX_RSS_URL,
-            headers=HEADERS,
-            timeout=30
-        )
-
-        if response.status_code != 200:
-
-            print(
-                f"Google шлюз вернул ошибку, "
-                f"статус: {response.status_code}"
-            )
-
-            return
-
-        soup = BeautifulSoup(
-            response.content,
-            "lxml-xml"
-        )
-
-        items = soup.find_all("item")
-
-        results_olx = []
-
-        print(
-            f"Лента OLX успешно получена через шлюз Google! "
-            f"Найдено объектов: {len(items)}"
-        )
-
-        for item in reversed(items):
-
-            title_tag = item.find("title")
-            link_tag = item.find("link")
-            description_tag = item.find("description")
 
             title = (
                 title_tag.get_text(
@@ -472,224 +85,210 @@ def check_olx():
                 else ""
             )
 
-            link = (
-                link_tag.get_text(
-                    " ",
-                    strip=True
-                )
-                if link_tag
-                else ""
-            )
-
-            description = (
-                description_tag.get_text(
-                    " ",
-                    strip=True
-                )
-                if description_tag
-                else ""
-            )
-
-            if not link:
+            if not title:
                 continue
 
-            clean_link = link.split("#")[0]
+            # ------------------------------------------------
+            # ССЫЛКА
+            # ------------------------------------------------
+
+            link_tag = card.find(
+                "a",
+                href=True
+            )
+
+            if not link_tag:
+                continue
+
+            href = link_tag.get(
+                "href",
+                ""
+            )
+
+            if not href:
+                continue
+
+            if href.startswith("/"):
+                href = (
+                    "https://www.olx.ua"
+                    + href
+                )
+
+            # ------------------------------------------------
+            # ВЕСЬ ТЕКСТ КАРТОЧКИ
+            # ------------------------------------------------
+
+            card_text = card.get_text(
+                " ",
+                strip=True
+            )
 
             full_text = (
-                title + " " + description
+                title
+                + " "
+                + card_text
             ).lower()
 
-            # =========================
-            # ИСКЛЮЧАЕМ НЕНУЖНОЕ
-            # =========================
-
-            stop_words = [
-                "посуточно",
-                "доба",
-                "добово",
-                "сниму",
-                "шукаю",
-                "ищу квартиру",
-                "шукаю квартиру"
-            ]
-
-            if any(
-                word in full_text
-                for word in stop_words
-            ):
-                continue
-
-            # =========================
-            # 3 КОМНАТЫ
-            # =========================
-
-            room_templates = [
-                "3-к",
-                "3 к",
-                "3к",
-                "3-комн",
-                "3 комн",
-                "трикімн",
-                "трехкомн",
-                "трёхкомн",
-                "3-х комн",
-                "3х комн",
-                "3-х кімн",
-                "3х кімн",
-                "3-кімн",
-                "3 кімн",
-                "2-3"
-            ]
-
-            room_ok = any(
-                template in full_text
-                for template in room_templates
-            )
-
-            if not room_ok:
-                continue
-
-            # =========================
-            # ПРОВЕРКА КЭША
-            # =========================
-
-            if clean_link in sent_olx_ads:
-                continue
-
-            sent_olx_ads.add(clean_link)
-
-            # =========================
+            # ------------------------------------------------
             # ЦЕНА
-            # =========================
+            # ------------------------------------------------
 
-            price_search = re.search(
-                r"(\d[\d\s]*)\s*(грн|uah)",
-                title,
-                re.IGNORECASE
+            price = extract_price(
+                card_text
             )
 
-            if price_search:
+            if price is None:
+                continue
 
-                price_value = int(
-                    re.sub(
-                        r"\D",
-                        "",
-                        price_search.group(1)
-                    )
-                )
+            # ------------------------------------------------
+            # 3 КОМНАТЫ
+            # ------------------------------------------------
 
-                if price_value <= 0 or price_value > 6000:
-                    continue
+            if not is_three_room(full_text):
+                continue
 
-                price_str = (
-                    f"{price_value} грн"
-                )
+            # ------------------------------------------------
+            # НЕ ПОСУТОЧНО
+            # ------------------------------------------------
 
-            else:
+            if is_daily_rent(full_text):
+                continue
 
-                price_str = (
-                    "Цена указана на сайте"
-                )
+            # ------------------------------------------------
+            # СОХРАНЯЕМ
+            # ------------------------------------------------
 
-            # =========================
-            # КАРТОЧКА
-            # =========================
-
-            card = (
-                f"🏠 {title}\n"
-                f"💵 {price_str}\n"
-                f"🔗 [Открыть на OLX]({clean_link})"
+            results.append(
+                {
+                    "title": title,
+                    "price": price,
+                    "description": card_text,
+                    "url": href,
+                }
             )
 
-            results_olx.append(card)
-
-        # =========================
-        # ОТПРАВКА
-        # =========================
-
-        if results_olx:
-
-            message = (
-                "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:\n\n"
-                + "\n\n---\n\n".join(results_olx)
-            )
-
-            if send_telegram_message(message):
-
-                save_cache(
-                    OLX_CACHE,
-                    sent_olx_ads
-                )
-
-        else:
-
+        except Exception as e:
             print(
-                "Новых подходящих объявлений "
-                "на OLX пока нет."
+                "Ошибка обработки карточки OLX:",
+                e
             )
 
-    except Exception as e:
+    return results
 
-        print(
-            f"Ошибка в модуле OLX: {e}"
+
+# ============================================================
+# ФОРМИРОВАНИЕ СООБЩЕНИЯ OLX
+# ============================================================
+
+def format_olx_message(items):
+    if not items:
+        return ""
+
+    lines = [
+        "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:"
+    ]
+
+    for item in items:
+
+        lines.append("")
+        lines.append(
+            "🏠 " + item["title"]
         )
-        # =========================
-# ЗАПУСК
-# =========================
 
-if __name__ == "__main__":
+        lines.append(
+            "💵 "
+            + str(item["price"])
+            + " грн"
+        )
 
+        description = item.get(
+            "description",
+            ""
+        )
+
+        # Чтобы Telegram не получал
+        # огромный текст карточки
+        if len(description) > 300:
+            description = (
+                description[:300]
+                + "..."
+            )
+
+        if description:
+            lines.append(
+                "📄 " + description
+            )
+
+        lines.append(
+            "🔗 Открыть на OLX"
+        )
+
+        lines.append(
+            item["url"]
+        )
+
+        lines.append(
+            "---"
+        )
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# ПРОВЕРКА OLX
+# ============================================================
+
+def check_olx():
+    print("Проверка OLX...")
+
+    html = get_olx_feed()
+
+    if not html:
+        print(
+            "OLX: данные не получены."
+        )
+        return
+
+    items = parse_olx(
+        html
+    )
+
+    print(
+        "OLX: найдено подходящих:",
+        len(items)
+    )
+
+    if not items:
+        print(
+            "Новых подходящих объявлений "
+            "на OLX пока нет."
+        )
+        return
+
+    message = format_olx_message(
+        items
+    )
+
+    if message:
+        send_telegram(
+            message
+        )
+
+
+# ============================================================
+# ЗАВЕРШЕНИЕ ПРОВЕРКИ
+# ============================================================
+
+def run_checks():
     print(
         "Запуск плановой проверки сайтов..."
     )
-    # =========================
-# ЗАПУСК
-# =========================
 
-if __name__ == "__main__":
-
-    print(
-        "Запуск плановой проверки сайтов..."
-    )
-
-    check_makler()
-    check_olx()
-
-    print(
-        "Проверка завершена. "
-        "Запуск принудительного теста связи..."
-    )
-
-    send_telegram_message(
-        "🤖 Проверка связи успешна!\n\n"
-        "Бот полностью настроен, подключен к GitHub "
-        "и вашему шлюзу Google.\n\n"
-        "Я буду проверять OLX и Makler каждые 2 часа "
-        "и присылать сюда новые 3-к квартиры "
-        "до 6000 грн."
-    )
-
-    print(
-        "Тестовое сообщение отправлено. "
-        "Скрипт успешно завершен."
-    )
-    # ТЕСТ TELEGRAM
-    # =========================
-
-    print(
-        "Проверка завершена. "
-        "Запуск принудительного теста связи..."
-    )
-
-    # =========================
-# ЗАПУСК
-# =========================
-
-if __name__ == "__main__":
-
-    print(
-        "Запуск плановой проверки сайтов..."
-    )
+    if not is_working_time():
+        print(
+            "Проверка объявлений пропущена."
+        )
+        return
 
     check_makler()
     check_olx()
@@ -697,8 +296,67 @@ if __name__ == "__main__":
     print(
         "Проверка завершена."
     )
+# ============================================================
+# ТЕСТ СВЯЗИ С TELEGRAM
+# ============================================================
+
+def telegram_test():
+    print(
+        "Запуск принудительного теста связи..."
+    )
+
+    message = (
+        "🤖 Проверка связи успешна!\n\n"
+        "Бот подключен к Telegram и GitHub.\n\n"
+        "Я буду проверять OLX и Makler "
+        "каждые 2 часа и искать новые "
+        "3-к квартиры до 6000 грн."
+    )
+
+    if send_telegram(message):
+        print(
+            "Тестовое сообщение отправлено."
+        )
+    else:
+        print(
+            "Не удалось отправить "
+            "тестовое сообщение."
+        )
+
+
+# ============================================================
+# ЗАЩИТА ОТ ПОВТОРНЫХ ЗАПУСКОВ
+# ============================================================
+
+def main():
+    print(
+        "Запуск плановой проверки сайтов..."
+    )
+
+    try:
+        run_checks()
+
+    except Exception as e:
+        print(
+            "Критическая ошибка:",
+            e
+        )
+
+    print(
+        "Проверка завершена."
+    )
+
+    # Тест Telegram можно оставить включённым,
+    # чтобы после каждого запуска GitHub Actions
+    # было видно, что бот действительно работает.
+    telegram_test()
 
     print(
         "Скрипт успешно завершен."
     )
-    
+# ============================================================
+# ЗАПУСК ПРОГРАММЫ
+# ============================================================
+
+if __name__ == "__main__":
+    main()
