@@ -3,9 +3,9 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
-# Инициализация токенов из настроек репозитория GitHub
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-CHAT_ID = os.environ["CHAT_ID"]
+# Очищаємо токен та ID чату від прихованих пробілів та перенесень рядків
+BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
+CHAT_ID = os.environ["CHAT_ID"].strip()
 
 # Безопасный URL для Makler Николаев (работает стабильно)
 MAKLER_URL = "https://makler.ua"
