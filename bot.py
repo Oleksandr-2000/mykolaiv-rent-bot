@@ -152,7 +152,8 @@ def check_olx():
             if not link:
                 continue
                 
-            clean_link = link.split("#")
+        clean_link = link.split("#")[0]
+
             full_text = (title + " " + description).lower()
             
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
