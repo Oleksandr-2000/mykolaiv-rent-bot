@@ -1,7 +1,6 @@
 import os
 import re
 import requests
-import cloudscraper
 from bs4 import BeautifulSoup
 
 # Инициализация токенов из настроек репозитория GitHub
@@ -11,9 +10,12 @@ CHAT_ID = os.environ["CHAT_ID"]
 # Безопасный URL для Makler Николаев
 MAKLER_URL = "https://makler.ua"
 
-# РАСШИРЕННЫЙ URL ДЛЯ OLX: убрали фильтр комнат, ищем вообще ВСЕ квартиры в Николаеве до 6000 грн,
-# чтобы код сам находил скрытые 3-комнатные варианты, которые отсеивал сайт.
+# Расширенный URL для OLX без жесткого фильтра комнат сайта
 OLX_RSS_URL = "https://olx.ua"
+
+ZAGOLOVKI = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
 
 MAKLER_CACHE = "makler_cache.txt"
 OLX_CACHE = "olx_cache.txt"
@@ -50,8 +52,7 @@ def send_telegram_message(message_text):
 def check_makler():
     global sent_makler_ads
     try:
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(MAKLER_URL, timeout=30)
+        response = requests.get(MAKLER_URL, headers=ZAGOLOVKI, timeout=30)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, "html.parser")
@@ -107,6 +108,8 @@ def check_makler():
             message = "🏠 *НОВЫЕ ОБЪЯВЛЕНИЯ НА MAKLER:*\n\n" + "\n\n---\n\n".join(results)
             send_telegram_message(message)
             save_cache(MAKLER_CACHE, sent_makler_ads)
+        else:
+            print("Новых объявлений на Makler пока нет.")
             
     except Exception as e:
         print(f"Ошибка в модуле Makler: {e}")
@@ -114,18 +117,27 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(OLX_RSS_URL, timeout=30)
+        # Используем альтернативный CORS-прокси без искажения протокола url
+        безопасный_url = f"https://allorigins.win{requests.utils.quote(OLX_RSS_URL)}"
+        response = requests.get(безопасный_url, headers=ZAGOLOVKI, timeout=30)
         
         if response.status_code != 200:
-            print(f"Отказ OLX RSS, статус: {response.status_code}")
+            print(f"Прокси недоступен, статус: {response.status_code}")
             return
             
-        soup = BeautifulSoup(response.content, "lxml-xml")
+        # Извлекаем XML контент из JSON-ответа прокси сервера
+        данные_json = response.json()
+        xml_content = данные_json.get("contents", "")
+        
+        if not xml_content:
+            print("Прокси вернул пустой контент.")
+            return
+
+        soup = BeautifulSoup(xml_content, "lxml-xml")
         items = soup.find_all("item")
         results_olx = []
         
-        print(f"OLX RSS успешно прочитан. Найдено объявлений в ленте общего поиска: {len(items)}")
+        print(f"OLX RSS успешно прочитан через прокси. Найдено объявлений: {len(items)}")
         
         for item in reversed(items):
             title = item.find("title").text if item.find("title") else ""
@@ -138,16 +150,15 @@ def check_olx():
             clean_link = link.split("#")[0]
             full_text = (title + " " + description).lower()
             
-            # Исключаем посуточные и поиск жилья
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
             if any(word in full_text for word in stop_words):
                 continue
                 
-            # Глубокий текстовый фильтр комнат внутри Python (ищет шаблоны 3-к, а также фразы типа "2-3")
+            # Ищем любые упоминания 3 комнат или текстовых шаблонов "2-3"
             room_ok = False
             room_templates = [
                 "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
-                "3-х комн", "3х комн", "3-х кімн", "3х кімн", "3-кімн", "3 кімн", "2-3"
+                "3-х комн", "3х комн", "3-х кін", "3х кімн", "3-кімн", "3 кімн", "2-3"
             ]
             for template in room_templates:
                 if template in full_text:
@@ -170,6 +181,8 @@ def check_olx():
             message = "🏠 *НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:*\n\n" + "\n\n---\n\n".join(results_olx)
             send_telegram_message(message)
             save_cache(OLX_CACHE, sent_olx_ads)
+        else:
+            print("Новых подходящих объявлений на OLX пока нет.")
             
     except Exception as e:
         print(f"Ошибка в модуле OLX: {e}")
