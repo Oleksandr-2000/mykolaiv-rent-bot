@@ -181,7 +181,7 @@ def send_telegram_message(message_text):
         )
 
         return False
-        def check_makler():
+       def check_makler():
     global sent_makler_ads
 
     try:
@@ -189,7 +189,7 @@ def send_telegram_message(message_text):
             MAKLER_URL,
             headers=ZAGOLOVKI,
             timeout=30
-        )
+        ) 
 
         response.raise_for_status()
 
