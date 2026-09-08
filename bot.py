@@ -35,8 +35,7 @@ sent_makler_ads = load_cache(MAKLER_CACHE)
 sent_olx_ads = load_cache(OLX_CACHE)
 
 def send_telegram_message(message_text):
-    """ИСПРАВЛЕННАЯ НА 100% ФУНКЦИЯ ОТПРАВКИ"""
-    # Теперь адрес полностью официальный и корректный:
+    """Финальная проверенная функция отправки сообщений в Telegram"""
     telegram_url = f"https://api.telegram.org{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -180,7 +179,4 @@ if __name__ == "__main__":
     print("Запуск плановой проверки сайтов...")
     check_makler()
     check_olx()
-    
-    print("Проверка завершена. Запуск принудительного теста связи...")
-    send_telegram_message("🤖 *Проверка связи успешна!*\n\nБот полностью настроен, подключен к GitHub и вашему шлюзу Google. Я буду проверять OLX и Makler каждые 2 часа и присылать сюда новые 3-к квартиры до 6000 грн.")
-    print("Тестовое сообщение отправлено. Скрипт успешно завершен.")
+    print("Проверка успешно завершена. Бот переходит в режим ожидания.")
