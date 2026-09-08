@@ -35,19 +35,35 @@ sent_makler_ads = load_cache(MAKLER_CACHE)
 sent_olx_ads = load_cache(OLX_CACHE)
 
 def send_telegram_message(message_text):
-    """Финальная проверенная функция отправки сообщений в Telegram"""
-    telegram_url = f"https://api.telegram.org{BOT_TOKEN}/sendMessage"
+    """Отправка сообщения в Telegram"""
+    telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
     payload = {
         "chat_id": CHAT_ID,
         "text": message_text,
         "parse_mode": "Markdown",
         "disable_web_page_preview": False
     }
+
     try:
-        response_tg = requests.post(telegram_url, json=payload, timeout=30)
+        response_tg = requests.post(
+            telegram_url,
+            json=payload,
+            timeout=30
+        )
+
+        print("Telegram HTTP:", response_tg.status_code)
+        print("Telegram ответ:", response_tg.text)
+
         response_tg.raise_for_status()
+
+        print("Сообщение успешно отправлено в Telegram")
+        return True
+
     except Exception as e:
-        print(f"Ошибка отправки сообщения: {e}")
+        print(f"Ошибка отправки сообщения в Telegram: {e}")
+        return False
+```
 
 def check_makler():
     global sent_makler_ads
