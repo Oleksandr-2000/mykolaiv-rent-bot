@@ -1,0 +1,31 @@
+name: Telegram Rent Bot - Schedule
+
+on:
+  schedule:
+    # Каждые 3 часа, круглосуточно
+    - cron: "0 */3 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  rent-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run rent bot
+        run: python bot.py
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
