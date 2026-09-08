@@ -422,6 +422,35 @@ def check_makler():
 
         if results_olx:
             message = (
+                "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:\n\n"
+                + "\n\n---\n\n".join(results_olx)
+            )
+
+            if send_telegram_message(message):
+                save_cache(
+                    OLX_CACHE,
+                    sent_olx_ads
+                )
+
+        else:
+            print(
+                "Новых подходящих объявлений на OLX пока нет."
+            )
+
+    except Exception as e:
+        print(
+            f"Ошибка в модуле OLX: {e}"
+        )
+```
+
+После этого не меняй ничего ниже.
+
+Сразу после последнего:
+
+python
+        print(
+            f"Ошибка в модуле OLX: {e}"
+        )
         f name == "main":
     print("Запуск плановой проверки сайтов...")
 
