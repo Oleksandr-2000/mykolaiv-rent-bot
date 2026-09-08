@@ -330,13 +330,12 @@ def check_makler():
                 "доба",
                 "добово"
             ]
-
             if any(
                 word in full_text
-                for word in daily_words
-            (sad)
+                for word in stop_words
+           (sad)
                 continue
-
+ 
             # -------------------------
             # ССЫЛКА
             # -------------------------
