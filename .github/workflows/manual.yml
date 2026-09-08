@@ -2,9 +2,8 @@ name: Telegram Test
 
 on:
   workflow_dispatch:
-
   schedule:
-    - cron: "0 5,7,9,11,13,15 * * *"
+    - cron: "0 */2 * * *"
 
 jobs:
   test:
@@ -19,8 +18,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install requests
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 lxml
+
       - name: Send Telegram message
         run: python bot.py
         env:
