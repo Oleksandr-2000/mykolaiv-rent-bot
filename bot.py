@@ -181,12 +181,12 @@ def send_telegram_message(message_text):
         )
 
         return False
-       def check_makler():
-    global sent_makler_ads
+    def check_makler():
+        global sent_makler_ads
 
-    try:
-        response = requests.get(
-            MAKLER_URL,
+        try:
+            response = requests.get(
+                MAKLER_URL,
             headers=ZAGOLOVKI,
             timeout=30
         ) 
@@ -356,7 +356,7 @@ def send_telegram_message(message_text):
         print(
             f"Ошибка в модуле Makler: {e}"
         )
-        def check_olx():
+    def check_olx():
     global sent_olx_ads
 
     try:
