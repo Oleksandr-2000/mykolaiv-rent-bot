@@ -1,34 +1,18 @@
 import os
 import re
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 
 # Инициализация токенов из настроек репозитория GitHub
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# Исправленная и полная ссылка для Makler
+# Полный, абсолютно чистый базовый URL для Makler Николаев (3-комнатные до 6000 грн)
 MAKLER_URL = "https://makler.ua[]=17&city[]=384&city[]=372&city[]=373&city[]=374&city[]=375&city[]=376"
 
-# Прямая RSS ссылка на OLX
+# Чистая RSS ссылка на OLX Николаев (3-комнатные до 6000 грн)
 OLX_RSS_URL = "https://olx.ua"
-
-# Расширенные заголовки для имитации реального браузера и обхода Cloudflare
-ZAGOLOVKI = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "uk-UA,uk;q=0.9,ru;q=0.8,en-US;q=0.7,en;q=0.6",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1"
-}
 
 MAKLER_CACHE = "makler_cache.txt"
 OLX_CACHE = "olx_cache.txt"
@@ -65,7 +49,9 @@ def send_telegram_message(message_text):
 def check_makler():
     global sent_makler_ads
     try:
-        response = requests.get(MAKLER_URL, headers=ZAGOLOVKI, timeout=30)
+        # Создаем сессию обхода защит для Маклера
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(MAKLER_URL, timeout=30)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, "html.parser")
@@ -110,7 +96,8 @@ def check_makler():
                 continue
                 
             href = title_tag.get("href", "")
-            link = urljoin("https://makler.ua", href)
+            # Корректное ручное склеивание относительной ссылки
+            link = f"https://makler.ua{href}" if href.startswith("/") else href
             
             if link not in sent_makler_ads:
                 sent_makler_ads.add(link)
@@ -130,26 +117,19 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
-        # Используем прокси-зеркало или CORS-прокси для гарантированного обхода ошибки 403 на GitHub
-        # Это перенаправляет запрос так, что OLX видит обычного пользователя, а не робота
-        proxy_url = f"https://allorigins.win{requests.utils.quote(OLX_RSS_URL)}"
+        # Используем cloudscraper для автоматического прохождения Cloudflare блокировки 403 на OLX
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(OLX_RSS_URL, timeout=30)
         
-        response = requests.get(proxy_url, headers={"User-Agent": ZAGOLOVKI["User-Agent"]}, timeout=30)
         if response.status_code != 200:
-            print(f"Прокси вернул статус {response.status_code}. Пробуем напрямую...")
-            response = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
+            print(f"Отказ OLX RSS, статус: {response.status_code}")
+            return
             
-        # Распаковываем содержимое из JSON-ответа прокси
-        if "contents" in response.json():
-            xml_content = response.json()["contents"]
-        else:
-            xml_content = response.content
-
-        soup = BeautifulSoup(xml_content, "xml")
+        soup = BeautifulSoup(response.content, "xml")
         items = soup.find_all("item")
         results_olx = []
         
-        print(f"OLX RSS успешно прочитан. Найдено сырых объявлений: {len(items)}")
+        print(f"OLX RSS успешно прочитан. Найдено объявлений в ленте: {len(items)}")
         
         for item in reversed(items):
             title = item.find("title").text if item.find("title") else ""
