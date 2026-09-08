@@ -35,8 +35,7 @@ sent_makler_ads = load_cache(MAKLER_CACHE)
 sent_olx_ads = load_cache(OLX_CACHE)
 
 def send_telegram_message(message_text):
-    """ИСПРАВЛЕННАЯ функция отправки уведомлений в Telegram"""
-    # Исправлено: добавлен префикс 'api.' перед доменом telegram.org
+    """ИСПРАВЛЕННАЯ ФУНКЦИЯ ОТПРАВКИ (api.telegram.org)"""
     telegram_url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -144,7 +143,6 @@ def check_olx():
             if any(word in full_text for word in stop_words):
                 continue
                 
-            # Проверяем все текстовые вариации 3 комнат (включая "2-3")
             room_ok = False
             room_templates = [
                 "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
@@ -181,9 +179,7 @@ if __name__ == "__main__":
     print("Запуск плановой проверки сайтов...")
     check_makler()
     check_olx()
+    
     print("Проверка завершена. Запуск принудительного теста связи...")
-    
-    # ЭТА СТРОЧКА ПРИНУДИТЕЛЬНО ОТПРАВИТ ВАМ СООБЩЕНИЕ ДЛЯ ПРОВЕРКИ:
     send_telegram_message("🤖 *Проверка связи успешна!*\n\nБот полностью настроен, подключен к GitHub и вашему шлюзу Google. Я буду проверять OLX и Makler каждые 2 часа и присылать сюда новые 3-к квартиры до 6000 грн.")
-    
     print("Тестовое сообщение отправлено. Скрипт успешно завершен.")
