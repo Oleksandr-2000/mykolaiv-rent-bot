@@ -296,42 +296,42 @@ def check_makler():
     except Exception as e:
         print(f"Ошибка в модуле Makler: {e}")
     def check_olx():
-    global sent_olx_ads
+        global sent_olx_ads
 
-    try:
-        response = requests.get(
-            OLX_RSS_URL,
-            headers=ZAGOLOVKI,
-            timeout=30
-        )
-
-        if response.status_code != 200:
-            print(
-                f"Google шлюз вернул ошибку, статус: "
-                f"{response.status_code}"
+        try:
+            response = requests.get(
+                OLX_RSS_URL,
+                headers=ZAGOLOVKI,
+                timeout=30
             )
-            return
 
-        soup = BeautifulSoup(
-            response.content,
-            "lxml-xml"
-        )
+            if response.status_code != 200:
+               print(
+                    f"Google шлюз вернул ошибку, статус: "
+                    f"{response.status_code}"
+                )
+                    return
 
-        items = soup.find_all("item")
-        results_olx = []
+            soup = BeautifulSoup(
+                response.content,
+                "lxml-xml"
+            )
+
+            items = soup.find_all("item")
+            results_olx = []
 
         print(
             f"Лента OLX успешно получена через шлюз Google! "
             f"Найдено объектов: {len(items)}"
         )
 
-        for item in reversed(items):
+            for item in reversed(items):
 
-            title = (
-                item.find("title").text
-                if item.find("title")
-                else ""
-            )
+                title = (
+                    item.find("title").text
+                    if item.find("title")
+                    else ""
+        )
 
             link = (
                 item.find("link").text
