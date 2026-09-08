@@ -63,7 +63,7 @@ def send_telegram_message(message_text):
     except Exception as e:
         print(f"Ошибка отправки сообщения в Telegram: {e}")
         return False
-```
+
 
 def check_makler():
     global sent_makler_ads
@@ -148,13 +148,13 @@ def check_olx():
             title = item.find("title").text if item.find("title") else ""
             link = item.find("link").text if item.find("link") else ""
             description = item.find("description").text if item.find("description") else ""
-            
             if not link:
                 continue
-                
-        clean_link = link.split("#")[0]
+
+            clean_link = link.split("#")[0]
 
             full_text = (title + " " + description).lower()
+            
             
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
             if any(word in full_text for word in stop_words):
