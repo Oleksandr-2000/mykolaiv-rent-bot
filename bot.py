@@ -7,32 +7,44 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 # ============================================================
-# НАСТРОЙКИ И ГЛОБАЛЬНЫЕ КОНСТАНТЫ
+# НАСТРОЙКИ
 # ============================================================
 BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
 CHAT_ID = os.environ["CHAT_ID"].strip()
 MAX_PRICE = 6000
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
+# ============================================================
+# OLX GOOGLE GATEWAY
+# ============================================================
 OLX_GATEWAY_URL = (
-    "https://google.com"
+    "https://script.google.com/macros/s/"
     "AKfycbypfojtqC_AZEqbFwlSQ_cH6RLHRxe9s8PyaTp8aFLn801nQKnvdK8KyvAZ0iXdkjBgUw"
     "/exec"
 )
 
+# ============================================================
+# ПОИСК OLX
+# ============================================================
 OLX_SEARCH_URL = (
-    "https://olx.ua"
+    "https://www.olx.ua/uk/nedvizhimost/kvartiry/"
     "dolgosrochnaya-arenda-kvartir/nikolaev_106/"
     "?currency=UAH"
     "&search%5Bfilter_float_price:to%5D=6000"
     "&search%5Bfilter_enum_number_of_rooms_string%5D%5B0%5D=trehkomnatnye"
 )
 
+# ============================================================
+# MAKLER
+# ============================================================
 MAKLER_URL = (
-    "https://makler.ua"
+    "https://makler.ua/ua/real-estate/"
     "real-estate-for-rent/apartments-for-rent"
 )
 
+# ============================================================
+# СЛОВА ДЛЯ ФИЛЬТРАЦИИ
+# ============================================================
 DAILY_WORDS = [
     "посуная", "тестирование", "за сутки", "за ночь", "на ночь",
     "посуточный", "посуточное", "посуточно", "доба", "добово"
@@ -45,14 +57,14 @@ ROOM_TEMPLATES = [
 ]
 
 # ============================================================
-# TELEGRAM УТИЛИТЫ
+# TELEGRAM
 # ============================================================
 def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
         print("Ошибка: BOT_TOKEN или CHAT_ID не заданы.")
         return False
 
-    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": message,
@@ -71,6 +83,175 @@ def send_telegram(message):
         print("Ошибка Telegram:", e)
     return False
 
+# ============================================================
+# ВРЕМЯ
+# ============================================================
+def print_current_time():
+    now = datetime.now(KYIV_TZ)
+    print("Украинское время:", now.strftime("%Y-%m-%d %H:%M:%S"))
+    return now
+
+# ============================================================
+# ФИЛЬТРЫ И СОРТИРОВКА ЦЕНЫ
+# ============================================================
+def is_daily_rent(text):
+    if not text:
+        return False
+    text = text.lower()
+    return any(word in text for word in DAILY_WORDS)
+
+def is_three_room(text):
+    if not text:
+        return False
+    text = text.lower()
+    return any(template.lower() in text for template in ROOM_TEMPLATES)
+
+def extract_price(text):
+    if not text:
+        return None
+    text = text.replace("\xa0", " ")
+    patterns = [
+        r"([\d\s]+)\s*(?:грн|uah|₴)",
+        r"([\d\s]+)\s*грив",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+        value = re.sub(r"\D", "", match.group(1))
+        if not value:
+            continue
+        price = int(value)
+        if 0 < price <= MAX_PRICE:
+            return price
+    return None
+# ============================================================
+# ПРОВЕРКА ОБЪЯВЛЕНИЯ
+# ============================================================
+def is_valid_listing(title, description="", price=None):
+    full_text = (str(title) + " " + str(description)).lower()
+    if is_daily_rent(full_text):
+        return False
+    if not is_three_room(full_text):
+        return False
+    if price is not None and price > MAX_PRICE:
+        return False
+    return True
+
+# ============================================================
+# ПОЛУЧЕНИЕ OLX ЧЕРЕЗ GOOGLE ШЛЮЗ
+# ============================================================
+def get_olx_feed():
+    print("Получение OLX через Google шлюз...")
+    try:
+        response = requests.get(
+            OLX_GATEWAY_URL,
+            params={"url": OLX_SEARCH_URL},
+            timeout=60
+        )
+        if response.status_code != 200:
+            print("Google шлюз вернул ошибку, статус:", response.status_code)
+            print("Ответ:", response.text[:500])
+            return ""
+        print("Лента OLX успешно получена через шлюз Google!")
+        return response.text
+    except Exception as e:
+        print("Ошибка OLX шлюза:", e)
+        return ""
+
+# ============================================================
+# ПАРСИНГ OLX
+# ============================================================
+def parse_olx(html):
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    cards = soup.find_all("div", attrs={"data-cy": "l-card"})
+    print("OLX: найдено карточек:", len(cards))
+
+    for card in cards:
+        try:
+            title_tag = card.find("h4")
+            if not title_tag:
+                title_tag = card.find("h6")
+            title = title_tag.get_text(" ", strip=True) if title_tag else ""
+            if not title:
+                continue
+
+            link_tag = card.find("a", href=True)
+            if not link_tag:
+                continue
+            href = link_tag.get("href", "")
+            if not href:
+                continue
+            if href.startswith("/"):
+                href = "https://www.olx.ua" + href
+
+            card_text = card.get_text(" ", strip=True)
+            price = extract_price(card_text)
+            if price is None:
+                continue
+
+            if not is_valid_listing(title, card_text, price):
+                continue
+
+            results.append({
+                "title": title,
+                "price": price,
+                "description": card_text,
+                "url": href,
+            })
+        except Exception as e:
+            print("Ошибка обработки карточки OLX:", e)
+    return results
+
+# ============================================================
+# ФОРМИРОВАНИЕ СООБЩЕНИЯ OLX
+# ============================================================
+def format_olx_message(items):
+    if not items:
+        return ""
+    lines = ["🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:"]
+    for item in items:
+        lines.append("")
+        lines.append("🏠 " + item["title"])
+        lines.append("💵 " + str(item["price"]) + " грн")
+        
+        description = item.get("description", "")
+        if len(description) > 300:
+            description = description[:300] + "..."
+        if description:
+            lines.append("📄 " + description)
+            
+        lines.append("🔗 Открыть на OLX")
+        lines.append(item["url"])
+        lines.append("---")
+    return "\n".join(lines)
+
+# ============================================================
+# ПРОВЕРКА OLX
+# ============================================================
+def check_olx():
+    print("Проверка OLX...")
+    html = get_olx_feed()
+    if not html:
+        print("OLX: данные не получены.")
+        return
+
+    items = parse_olx(html)
+    print("OLX: найдено подходящих:", len(items))
+    if not items:
+        print("Новых подходящих объявлений на OLX пока нет.")
+        return
+
+    message = format_olx_message(items)
+    if message:
+        send_telegram(message)
+
+# ============================================================
+# ФОРМИРОВАНИЕ УНИВЕРСАЛЬНОГО СООБЩЕНИЯ (ДЛЯ ПАКЕТНОЙ ОТПРАВКИ)
+# ============================================================
 def format_listing(listing, source):
     title = listing.get("title", "Без названия")
     description = listing.get("description", "")
@@ -112,139 +293,8 @@ def send_listings(listings, source):
 
     for message in messages:
         send_telegram(message)
-
 # ============================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФИЛЬТРЫ И ВРЕМЯ
-# ============================================================
-def print_current_time():
-    now = datetime.now(KYIV_TZ)
-    print("Украинское время:", now.strftime("%Y-%m-%d %H:%M:%S"))
-    return now
-
-def is_daily_rent(text):
-    if not text:
-        return False
-    text = text.lower()
-    return any(word in text for word in DAILY_WORDS)
-
-def is_three_room(text):
-    if not text:
-        return False
-    text = text.lower()
-    return any(template.lower() in text for template in ROOM_TEMPLATES)
-
-def extract_price(text):
-    if not text:
-        return None
-    text = text.replace("\xa0", " ")
-    patterns = [
-        r"([\d\s]+)\s*(?:грн|uah|₴)",
-        r"([\d\s]+)\s*грив",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if not match:
-            continue
-        value = re.sub(r"\D", "", match.group(1))
-        if not value:
-            continue
-        price = int(value)
-        if 0 < price <= MAX_PRICE:
-            return price
-    return None
-
-def is_valid_listing(title, description="", price=None):
-    full_text = (str(title) + " " + str(description)).lower()
-    if is_daily_rent(full_text):
-        return False
-    if not is_three_room(full_text):
-        return False
-    if price is not None and price > MAX_PRICE:
-        return False
-    return True
-
-# ============================================================
-# ПАРСИНГ OLX
-# ============================================================
-def get_olx_feed():
-    print("Получение OLX через Google шлюз...")
-    try:
-        response = requests.get(
-            OLX_GATEWAY_URL,
-            params={"url": OLX_SEARCH_URL},
-            timeout=60
-        )
-        if response.status_code != 200:
-            print("Google шлюз вернул ошибку, статус:", response.status_code)
-            print("Ответ:", response.text[:500])
-            return ""
-        print("Лента OLX успешно получена через шлюз Google!")
-        return response.text
-    except Exception as e:
-        print("Ошибка OLX шлюза:", e)
-        return ""
-
-def parse_olx(html):
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    results = []
-    cards = soup.find_all("div", attrs={"data-cy": "l-card"})
-    print("OLX: найдено карточек:", len(cards))
-
-    for card in cards:
-        try:
-            title_tag = card.find("h4")
-            if not title_tag:
-                title_tag = card.find("h6")
-            title = title_tag.get_text(" ", strip=True) if title_tag else ""
-            if not title:
-                continue
-
-            link_tag = card.find("a", href=True)
-            if not link_tag:
-                continue
-            href = link_tag.get("href", "")
-            if not href:
-                continue
-            if href.startswith("/"):
-                href = "https://olx.ua" + href
-
-            card_text = card.get_text(" ", strip=True)
-            price = extract_price(card_text)
-            if price is None:
-                continue
-
-            if not is_valid_listing(title, card_text, price):
-                continue
-
-            results.append({
-                "title": title,
-                "price": price,
-                "description": card_text,
-                "url": href,
-            })
-        except Exception as e:
-            print("Ошибка обработки карточки OLX:", e)
-    return results
-
-def check_olx():
-    print("Проверка OLX...")
-    html = get_olx_feed()
-    if not html:
-        print("OLX: данные не получены.")
-        return
-
-    items = parse_olx(html)
-    print("OLX: найдено подходящих:", len(items))
-    if not items:
-        print("Новых подходящих объявлений на OLX пока нет.")
-        return
-
-    send_listings(items, "OLX")
-
-# ============================================================
-# ПАРСИНГ MAKLER
+# ПРОВЕРКА MAKLER
 # ============================================================
 def check_makler():
     print("Проверка Makler...")
@@ -292,6 +342,7 @@ def check_makler():
             except Exception as e:
                 print("Ошибка обработки объявления Makler:", e)
 
+        # Убираем дубли
         unique = {}
         for item in results:
             unique[item["url"]] = item
@@ -308,18 +359,20 @@ def check_makler():
         print("Ошибка в модуле Makler:", e)
 
 # ============================================================
-# УПРАВЛЕНИЕ ЗАПУСКОМ
+# ОСНОВНАЯ ПРОВЕРКА
 # ============================================================
 def run_checks():
     print("Запуск плановой проверки сайтов...")
     print_current_time()
     print("Начинаем проверку объявлений...")
 
+    # Makler
     try:
         check_makler()
     except Exception as e:
         print("Ошибка Makler:", e)
 
+    # OLX
     try:
         check_olx()
     except Exception as e:
@@ -327,6 +380,9 @@ def run_checks():
 
     print("Проверка завершена.")
 
+# ============================================================
+# ЗАПУСК
+# ============================================================
 def main():
     run_checks()
 
