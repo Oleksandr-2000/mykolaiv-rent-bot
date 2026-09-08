@@ -3,10 +3,6 @@ name: Telegram Rent Bot
 on:
   workflow_dispatch:
 
-  schedule:
-    # Запуск каждые 3 часа круглосуточно
-    - cron: "0 */3 * * *"
-
 jobs:
   rent-bot:
     runs-on: ubuntu-latest
