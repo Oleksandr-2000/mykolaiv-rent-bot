@@ -1,21 +1,20 @@
 import os
 import re
 import requests
+from bs4 import BeautifulSoup
 
 # Инициализация токенов из настроек репозитория GitHub
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# Безопасный URL для Makler Николаев
+# Безопасный URL для Makler Николаев (работает стабильно)
 MAKLER_URL = "https://makler.ua"
 
-# Прямой запрос к официальному мобильному API OLX.ua (Николаев, аренда квартир до 6000 грн)
-# Использование официального API полностью исключает блокировки 403 и капчи Cloudflare!
-OLX_API_URL = "https://olx.ua"
+# Используем альтернативное бесплатное прокси-зеркало для полной очистки RSS-ленты OLX от защит Cloudflare
+OLX_RSS_URL = "https://bloople.ro"
 
 ZAGOLOVKI = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 MAKLER_CACHE = "makler_cache.txt"
@@ -56,7 +55,6 @@ def check_makler():
         response = requests.get(MAKLER_URL, headers=ZAGOLOVKI, timeout=30)
         response.raise_for_status()
         
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(response.text, "html.parser")
         articles = soup.find_all("article", id=re.compile(r"^tr_an-"))
         results = []
@@ -119,70 +117,53 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
-        # Запрашиваем официальное API напрямую
-        response = requests.get(OLX_API_URL, headers=ZAGOLOVKI, timeout=30)
+        response = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
         if response.status_code != 200:
-            print(f"API OLX вернуло статус: {response.status_code}")
+            print(f"Прокси-сервер OLX вернул ошибку, статус: {response.status_code}")
             return
             
-        json_data = response.json()
-        items = json_data.get("data", [])
-        
-        print(f"Мобильное API OLX успешно прочитано! Найдено объектов в выдаче: {len(items)}")
+        soup = BeautifulSoup(response.content, "lxml-xml")
+        items = soup.find_all("item")
         results_olx = []
         
+        print(f"Лента OLX успешно получена через прокси-декодер. Найдено объектов: {len(items)}")
+        
         for item in reversed(items):
-            title = item.get("title", "")
-            url = item.get("url", "")
-            description = item.get("description", "")
+            title = item.find("title").text if item.find("title") else ""
+            link = item.find("link").text if item.find("link") else ""
+            description = item.find("description").text if item.find("description") else ""
             
-            if not url:
+            if not link:
                 continue
                 
+            clean_link = link.split("#")
             full_text = (title + " " + description).lower()
             
-            # 1. Фильтр стоп-слов (посуточно и поиск "сниму жилье")
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
             if any(word in full_text for word in stop_words):
                 continue
                 
-            # 2. Извлекаем точные характеристики комнат из параметров API
-            number_of_rooms = ""
-            params = item.get("params", [])
-            for p in params:
-                if p.get("key") == "number_of_rooms":
-                    number_of_rooms = str(p.get("value", {}).get("key", ""))
-            
-            # Проверяем: либо сайт четко указал в параметрах 3 комнаты ('three'), 
-            # либо ищем текстовые шаблоны совпадений (включая "2-3") для скрытых объявлений
+            # Ищем текстовые совпадения трех комнат (включая "2-3" из вашего примера)
             room_ok = False
-            if "three" in number_of_rooms or "3" in number_of_rooms:
-                room_ok = True
-            else:
-                room_templates = [
-                    "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
-                    "3-х комн", "3х комн", "3-х кімн", "3х кімн", "3-кімн", "3 кімн", "2-3"
-                ]
-                for template in room_templates:
-                    if template in full_text:
-                        room_ok = True
-                        break
-                        
+            room_templates = [
+                "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
+                "3-х комн", "3х комн", "3-х кімн", "3х кімн", "3-кімн", "3 кімн", "2-3"
+            ]
+            for template in room_templates:
+                if template in full_text:
+                    room_ok = True
+                    break
+                    
             if not room_ok:
                 continue
                 
-            if url not in sent_olx_ads:
-                sent_olx_ads.add(url)
+            if clean_link not in sent_olx_ads:
+                sent_olx_ads.add(clean_link)
                 
-                # Достаем точную чистую цену из структуры JSON
-                price_info = item.get("price", {})
-                price_value = price_info.get("value")
-                if price_value:
-                    price_str = f"{price_value} грн"
-                else:
-                    price_str = "Цена указана на сайте"
+                price_search = re.search(r"(\d[\d\s]*)\s*(грн|uah)", title, re.IGNORECASE)
+                price_str = f"{price_search.group(1).strip()} грн" if price_search else "Цена указана на сайте"
                 
-                card = f"🏠 *{title}*\n💵 {price_str}\n🔗 [Открыть на OLX]({url})"
+                card = f"🏠 *{title}*\n💵 {price_str}\n🔗 [Открыть на OLX]({clean_link})"
                 results_olx.append(card)
                 
         if results_olx:
