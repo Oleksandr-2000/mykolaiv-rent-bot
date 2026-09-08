@@ -187,9 +187,9 @@ def send_telegram_message(message_text):
         try:
             response = requests.get(
                 MAKLER_URL,
-            headers=ZAGOLOVKI,
-            timeout=30
-        ) 
+                headers=ZAGOLOVKI,
+                timeout=30
+            ) 
 
         response.raise_for_status()
 
@@ -500,10 +500,10 @@ def send_telegram_message(message_text):
                 "Новых подходящих объявлений на OLX пока нет."
             )
 
-    except Exception as e:
-        print(
-            f"Ошибка в модуле OLX: {e}"
-        )
+        except Exception as e:
+            print(
+                f"Ошибка в модуле OLX: {e}"
+            )
         f name == "main":
     print("Запуск плановой проверки сайтов...")
 
