@@ -10,8 +10,8 @@ CHAT_ID = os.environ["CHAT_ID"]
 # Безопасный URL для Makler Николаев (работает стабильно)
 MAKLER_URL = "https://makler.ua"
 
-# Используем альтернативное бесплатное прокси-зеркало для полной очистки RSS-ленты OLX от защит Cloudflare
-OLX_RSS_URL = "https://bloople.ro"
+# Ваша личная ссылка на шлюз Google Apps Script, которая гарантированно обойдет 403 ошибку OLX!
+OLX_RSS_URL = "https://google.com"
 
 ZAGOLOVKI = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -117,16 +117,17 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
+        # Скрипт запрашивает данные у вашего личного прокси Google Диска
         response = requests.get(OLX_RSS_URL, headers=ZAGOLOVKI, timeout=30)
         if response.status_code != 200:
-            print(f"Прокси-сервер OLX вернул ошибку, статус: {response.status_code}")
+            print(f"Google шлюз вернул ошибку, статус: {response.status_code}")
             return
             
         soup = BeautifulSoup(response.content, "lxml-xml")
         items = soup.find_all("item")
         results_olx = []
         
-        print(f"Лента OLX успешно получена через прокси-декодер. Найдено объектов: {len(items)}")
+        print(f"Лента OLX успешно получена через шлюз Google! Найдено объектов: {len(items)}")
         
         for item in reversed(items):
             title = item.find("title").text if item.find("title") else ""
@@ -143,7 +144,7 @@ def check_olx():
             if any(word in full_text for word in stop_words):
                 continue
                 
-            # Ищем текстовые совпадения трех комнат (включая "2-3" из вашего примера)
+            # Ищем текстовые шаблоны для 3 комнат (включая "2-3" из вашего примера)
             room_ok = False
             room_templates = [
                 "3-к", "3 к", "3к", "3-комн", "3 комн", "трикімн", "трехкомн", "трёхкомн",
@@ -157,13 +158,13 @@ def check_olx():
             if not room_ok:
                 continue
                 
-            if clean_link not in sent_olx_ads:
-                sent_olx_ads.add(clean_link)
+            if clean_link[0] not in sent_olx_ads:
+                sent_olx_ads.add(clean_link[0])
                 
                 price_search = re.search(r"(\d[\d\s]*)\s*(грн|uah)", title, re.IGNORECASE)
                 price_str = f"{price_search.group(1).strip()} грн" if price_search else "Цена указана на сайте"
                 
-                card = f"🏠 *{title}*\n💵 {price_str}\n🔗 [Открыть на OLX]({clean_link})"
+                card = f"🏠 *{title}*\n💵 {price_str}\n🔗 [Открыть на OLX]({clean_link[0]})"
                 results_olx.append(card)
                 
         if results_olx:
