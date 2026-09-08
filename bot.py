@@ -8,10 +8,10 @@ from bs4 import BeautifulSoup
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# Полный, абсолютно чистый базовый URL для Makler Николаев (3-комнатные до 6000 грн)
-MAKLER_URL = "https://makler.ua[]=17&city[]=384&city[]=372&city[]=373&city[]=374&city[]=375&city[]=376"
+# Закодированный безопасный URL для Makler (чтобы не ломались скобки [])
+MAKLER_URL = "https://makler.ua"
 
-# Чистая RSS ссылка на OLX Николаев (3-комнатные до 6000 грн)
+# Чистая RSS ссылка на OLX
 OLX_RSS_URL = "https://olx.ua"
 
 MAKLER_CACHE = "makler_cache.txt"
@@ -49,7 +49,6 @@ def send_telegram_message(message_text):
 def check_makler():
     global sent_makler_ads
     try:
-        # Создаем сессию обхода защит для Маклера
         scraper = cloudscraper.create_scraper()
         response = scraper.get(MAKLER_URL, timeout=30)
         response.raise_for_status()
@@ -96,7 +95,6 @@ def check_makler():
                 continue
                 
             href = title_tag.get("href", "")
-            # Корректное ручное склеивание относительной ссылки
             link = f"https://makler.ua{href}" if href.startswith("/") else href
             
             if link not in sent_makler_ads:
@@ -117,7 +115,6 @@ def check_makler():
 def check_olx():
     global sent_olx_ads
     try:
-        # Используем cloudscraper для автоматического прохождения Cloudflare блокировки 403 на OLX
         scraper = cloudscraper.create_scraper()
         response = scraper.get(OLX_RSS_URL, timeout=30)
         
@@ -125,7 +122,8 @@ def check_olx():
             print(f"Отказ OLX RSS, статус: {response.status_code}")
             return
             
-        soup = BeautifulSoup(response.content, "xml")
+        # Используем парсер lxml для корректного чтения XML структуры OLX
+        soup = BeautifulSoup(response.content, "lxml-xml")
         items = soup.find_all("item")
         results_olx = []
         
@@ -139,7 +137,7 @@ def check_olx():
             if not link:
                 continue
                 
-            clean_link = link.split("#")[0]
+            clean_link = link.split("#")
             full_text = (title + " " + description).lower()
             
             stop_words = ["посуточно", "доба", "добово", "сниму", "шукаю", "ищу квартиру", "шукаю квартиру"]
