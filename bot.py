@@ -181,72 +181,32 @@ def send_telegram_message(message_text):
         )
 
         return False
-    def check_makler():
-        global sent_makler_ads
-
-        try:
-            response = requests.get(
-                MAKLER_URL,
-                headers=ZAGOLOVKI,
-                timeout=30
-            ) 
-
+def check_makler():
+    global sent_makler_ads
+    try:
+        response = requests.get(
+            MAKLER_URL,
+            headers=ZAGOLOVKI,
+            timeout=30
+        )
         response.raise_for_status()
 
-        soup = BeautifulSoup(
-            response.text,
-            "html.parser"
-        )
-
-        articles = soup.find_all(
-            "article",
-            id=re.compile(r"^tr_an-")
-        )
-
+        soup = BeautifulSoup(response.text, "html.parser")
+        articles = soup.find_all("article", id=re.compile(r"^tr_an-"))
         results = []
 
         for article in articles:
-            title_tag = article.select_one(
-                ".ls-detail_antTitle a"
-            )
-
-            price_tag = article.select_one(
-                ".ls-detail_price"
-            )
-
-            text_tag = article.select_one(
-                ".ls-detail_anText"
-            )
+            title_tag = article.select_one(".ls-detail_antTitle a")
+            price_tag = article.select_one(".ls-detail_price")
+            text_tag = article.select_one(".ls-detail_anText")
 
             if not title_tag:
                 continue
 
-            title = title_tag.get_text(
-                " ",
-                strip=True
-            )
-
-            price_text = (
-                price_tag.get_text(
-                    " ",
-                    strip=True
-                )
-                if price_tag
-                else ""
-            )
-
-            description = (
-                text_tag.get_text(
-                    " ",
-                    strip=True
-                )
-                if text_tag
-                else ""
-            )
-
-            full_text = (
-                title + " " + description
-            ).lower()
+            title = title_tag.get_text(" ", strip=True)
+            price_text = price_tag.get_text(" ", strip=True) if price_tag else ""
+            description = text_tag.get_text(" ", strip=True) if text_tag else ""
+            full_text = (title + " " + description).lower()
 
             price_match = re.search(
                 r"([\d\s]+)\s*(uah|грн)",
@@ -257,13 +217,7 @@ def send_telegram_message(message_text):
             if not price_match:
                 continue
 
-            price = int(
-                re.sub(
-                    r"\D",
-                    "",
-                    price_match.group(1)
-                )
-            )
+            price = int(re.sub(r"\D", "", price_match.group(1)))
 
             if price <= 0 or price > 6000:
                 continue
@@ -278,7 +232,6 @@ def send_telegram_message(message_text):
                 "3 комнатная",
                 "3-х комнатная",
                 "3х комнатная",
-                "3-комнатная",
                 "3-к.",
                 "3-к",
                 "3 к/к",
@@ -305,16 +258,10 @@ def send_telegram_message(message_text):
                 "доба"
             ]
 
-            if any(
-                word in full_text
-                for word in daily_words
-            (sad)
+            if any(word in full_text for word in daily_words):
                 continue
 
-            href = title_tag.get(
-                "href",
-                ""
-            )
+            href = title_tag.get("href", "")
 
             link = (
                 f"https://makler.ua{href}"
@@ -340,22 +287,14 @@ def send_telegram_message(message_text):
                 + "\n\n---\n\n".join(results)
             )
 
-            send_telegram_message(message)
-
-            save_cache(
-                MAKLER_CACHE,
-                sent_makler_ads
-            )
+            if send_telegram_message(message):
+                save_cache(MAKLER_CACHE, sent_makler_ads)
 
         else:
-            print(
-                "Новых объявлений на Makler пока нет."
-            )
+            print("Новых объявлений на Makler пока нет.")
 
     except Exception as e:
-        print(
-            f"Ошибка в модуле Makler: {e}"
-        )
+        print(f"Ошибка в модуле Makler: {e}")
     def check_olx():
     global sent_olx_ads
 
