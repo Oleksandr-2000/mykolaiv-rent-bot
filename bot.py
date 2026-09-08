@@ -424,31 +424,15 @@ def check_olx():
     global sent_olx_ads
 
     try:
-        # Проверяем, вставлена ли ссылка шлюза
-        if not OLX_RSS_URL.startswith("http"):
-            print(
-                "OLX_RSS_URL не настроен."
-            )
-            print(
-                "Вставьте настоящую ссылку "
-                "Google Apps Script."
-            )
-            return
-
         response = requests.get(
             OLX_RSS_URL,
             headers=HEADERS,
             timeout=30
         )
 
-        print(
-            "OLX шлюз HTTP:",
-            response.status_code
-        )
-
         if response.status_code != 200:
             print(
-                "Google шлюз вернул ошибку, "
+                f"Google шлюз вернул ошибку, "
                 f"статус: {response.status_code}"
             )
             return
@@ -459,32 +443,18 @@ def check_olx():
         )
 
         items = soup.find_all("item")
-
         results_olx = []
 
         print(
-            "Лента OLX успешно получена "
-            "через шлюз Google!"
-        )
-
-        print(
-            "Найдено объектов:",
-            len(items)
+            f"Лента OLX успешно получена через шлюз Google! "
+            f"Найдено объектов: {len(items)}"
         )
 
         for item in reversed(items):
 
-            title_tag = item.find(
-                "title"
-            )
-
-            link_tag = item.find(
-                "link"
-            )
-
-            description_tag = item.find(
-                "description"
-            )
+            title_tag = item.find("title")
+            link_tag = item.find("link")
+            description_tag = item.find("description")
 
             title = (
                 title_tag.text.strip()
@@ -513,10 +483,6 @@ def check_olx():
                 title + " " + description
             ).lower()
 
-            # -------------------------
-            # ИСКЛЮЧАЕМ ПОСУТОЧНЫЕ
-            # -------------------------
-
             stop_words = [
                 "посуточно",
                 "доба",
@@ -534,13 +500,6 @@ def check_olx():
                 continue
 
             room_ok = False
-                continue
-
-            # -------------------------
-            # ИЩЕМ 3 КОМНАТЫ
-            # -------------------------
-
-            room_ok = False
 
             room_templates = [
                 "3-к",
@@ -549,7 +508,6 @@ def check_olx():
                 "3-комн",
                 "3 комн",
                 "трикімн",
-                "три кімн",
                 "трехкомн",
                 "трёхкомн",
                 "3-х комн",
@@ -557,11 +515,11 @@ def check_olx():
                 "3-х кімн",
                 "3х кімн",
                 "3-кімн",
-                "3 кімн"
+                "3 кімн",
+                "2-3"
             ]
 
             for template in room_templates:
-
                 if template in full_text:
                     room_ok = True
                     break
@@ -569,20 +527,8 @@ def check_olx():
             if not room_ok:
                 continue
 
-            # -------------------------
-            # НЕ ОТПРАВЛЯЕМ ПОВТОРНО
-            # -------------------------
-
             if clean_link in sent_olx_ads:
                 continue
-
-            sent_olx_ads.add(
-                clean_link
-            )
-
-            # -------------------------
-            # ЦЕНА
-            # -------------------------
 
             price_search = re.search(
                 r"(\d[\d\s])\s(грн|uah)",
@@ -591,29 +537,11 @@ def check_olx():
             )
 
             if price_search:
-
                 price_str = (
-                    f"{price_search.group(1).strip()} "
-                    f"грн"
+                    f"{price_search.group(1).strip()} грн"
                 )
-
             else:
-
-                price_str = (
-                    "Цена указана на сайте"
-                )
-
-            print(
-                "OLX ОБЪЯВЛЕНИЕ:",
-                title
-            )
-
-            print(
-                "OLX ЦЕНА:",
-                price_str
-            )
-
-            print("---")
+                price_str = "Цена указана на сайте"
 
             card = (
                 f"🏠 {title}\n"
@@ -621,51 +549,12 @@ def check_olx():
                 f"🔗 [Открыть на OLX]({clean_link})"
             )
 
-            results_olx.append(
-                card
-            )
-
-        print(
-            "Подходящих объявлений OLX:",
-            len(results_olx)
-        )
-
-        if results_olx:
-
-            message = (
-                "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:\n\n"
-                + "\n\n---\n\n".join(
-                    results_olx
-                )
-            )
-
-            if send_telegram_message(
-                message
-            (sad)
-
-                save_cache(
-                    OLX_CACHE,
-                    sent_olx_ads
-                )
-
-        else:
-
-            print(
-                "Новых подходящих объявлений "
-                "на OLX пока нет."
-            )
-
-    except Exception as e:
-
-        print(
-            f"Ошибка в модуле OLX: {e}"
-        )
-         f"🔗 [Открыть на OLX]({clean_link})"
-            )
-
             results_olx.append(card)
 
+            sent_olx_ads.add(clean_link)
+
         if results_olx:
+
             message = (
                 "🏠 НОВЫЕ ОБЪЯВЛЕНИЯ НА OLX:\n\n"
                 + "\n\n---\n\n".join(results_olx)
@@ -676,6 +565,7 @@ def check_olx():
                     OLX_CACHE,
                     sent_olx_ads
                 )
+
         else:
             print(
                 "Новых подходящих объявлений "
@@ -686,8 +576,6 @@ def check_olx():
         print(
             f"Ошибка в модуле OLX: {e}"
         )
-
-
 if name == "main":
     print(
         "Запуск плановой проверки сайтов..."
