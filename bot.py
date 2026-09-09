@@ -172,18 +172,15 @@ def parse_olx(html):
     soup = BeautifulSoup(html, "html.parser")
     results = []
 
-    # Стандартные карточки OLX
     cards = soup.find_all("div", attrs={"data-cy": "l-card"})
     print("OLX: найдено стандартных карточек:", len(cards))
 
-    # Временно выводим содержимое карточек, чтобы точно увидеть структуру OLX.
+    # Показываем карточки и их ссылки
     for i, card in enumerate(cards, 1):
-    print(f"OLX CARD {i}:", card.get_text(" ", strip=True)[:1000])
-    link_tag = card.find("a", href=True)
-    if link_tag:
-        print(f"OLX URL {i}:", link_tag.get("href"))
-
         print(f"OLX CARD {i}:", card.get_text(" ", strip=True)[:1000])
+        link_tag = card.find("a", href=True)
+        if link_tag:
+            print(f"OLX URL {i}:", link_tag.get("href"))
 
     if not cards:
         print("OLX: стандартных карточек нет.")
@@ -191,9 +188,6 @@ def parse_olx(html):
 
     for card in cards:
         try:
-            # ------------------------------------------------
-            # НАЗВАНИЕ
-            # ------------------------------------------------
             title_tag = card.find("h4")
             if not title_tag:
                 title_tag = card.find("h6")
@@ -201,9 +195,6 @@ def parse_olx(html):
             if not title:
                 continue
 
-            # ------------------------------------------------
-            # ССЫЛКА
-            # ------------------------------------------------
             link_tag = card.find("a", href=True)
             if not link_tag:
                 continue
@@ -213,34 +204,17 @@ def parse_olx(html):
             if href.startswith("/"):
                 href = "https://www.olx.ua" + href
 
-            # ------------------------------------------------
-            # ТЕКСТ КАРТОЧКИ
-            # ------------------------------------------------
             card_text = card.get_text(" ", strip=True)
             full_text = (title + " " + card_text).lower()
-
-            # ------------------------------------------------
-            # ЦЕНА
-            # ------------------------------------------------
             price = extract_price(card_text)
+
             if price is None:
                 continue
-
-            # ------------------------------------------------
-            # 3 КОМНАТЫ
-            # ------------------------------------------------
             if not is_three_room(full_text):
                 continue
-
-            # ------------------------------------------------
-            # НЕ ПОСУТОЧНО
-            # ------------------------------------------------
             if is_daily_rent(full_text):
                 continue
 
-            # ------------------------------------------------
-            # СОХРАНЯЕМ
-            # ------------------------------------------------
             results.append({
                 "title": title,
                 "price": price,
@@ -250,9 +224,6 @@ def parse_olx(html):
         except Exception as e:
             print("Ошибка обработки карточки OLX:", e)
 
-    # --------------------------------------------------------
-    # УДАЛЯЕМ ДУБЛИКАТЫ
-    # --------------------------------------------------------
     unique = {}
     for item in results:
         url = item.get("url")
@@ -262,6 +233,7 @@ def parse_olx(html):
     results = list(unique.values())
     print("OLX: найдено подходящих:", len(results))
     return results
+
 
 # ============================================================
 # ФОРМИРОВАНИЕ И ОТПРАВКА СООБЩЕНИЙ
