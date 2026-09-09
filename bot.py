@@ -118,7 +118,7 @@ def print_current_time():
 # TELEGRAM
 # ============================================================
 def send_telegram(message):
-    uhttps://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": message,
@@ -127,6 +127,7 @@ def send_telegram(message):
     try:
         response = requests.post(url, data=data, timeout=30)
         print("Telegram HTTP:", response.status_code)
+        print("Telegram ответ:", response.text)
 
         if response.ok:
             result = response.json()
@@ -134,11 +135,12 @@ def send_telegram(message):
                 print("Сообщение успешно отправлено в Telegram")
                 return True
 
-        print("Ошибка отправки Telegram:", response.text)
+        print("Ошибка отправки Telegram")
         return False
     except Exception as e:
         print("Ошибка Telegram:", e)
         return False
+
 
 
 # ============================================================
