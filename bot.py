@@ -118,11 +118,7 @@ def print_current_time():
 # TELEGRAM
 # ============================================================
 def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        print("Ошибка: BOT_TOKEN или CHAT_ID не задан.")
-        return False
-
-    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    uhttps://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": message,
@@ -131,14 +127,19 @@ def send_telegram(message):
     try:
         response = requests.post(url, data=data, timeout=30)
         print("Telegram HTTP:", response.status_code)
+
         if response.ok:
-            print("Сообщение успешно отправлено в Telegram")
-            return True
-        print("Ошибка Telegram:", response.text[:500])
+            result = response.json()
+            if result.get("ok"):
+                print("Сообщение успешно отправлено в Telegram")
+                return True
+
+        print("Ошибка отправки Telegram:", response.text)
         return False
     except Exception as e:
-        print("Ошибка отправки в Telegram:", e)
+        print("Ошибка Telegram:", e)
         return False
+
 
 # ============================================================
 # PLAYWRIGHT — ПОЛУЧЕНИЕ OLX
