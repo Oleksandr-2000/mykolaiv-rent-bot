@@ -132,23 +132,26 @@ def send_telegram(message):
 # PLAYWRIGHT — ПОЛУЧЕНИЕ OLX
 # ============================================================
 def get_olx_html():
-    print("Открываем OLX через Playwright...")
+    print("Открываем OLX через системный Chromium...")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(
+                headless=True,
+                executable_path="/usr/bin/chromium"
+            )
             page = browser.new_page(
                 viewport={"width": 1440, "height": 1000},
                 locale="uk-UA",
                 user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "Mozilla/5.0 (X11; Linux x86_64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/140.0.0.0 Safari/537.36"
                 )
             )
             page.goto(OLX_SEARCH_URL, wait_until="domcontentloaded", timeout=90000)
             print("OLX: страница открыта.")
-            
-            # Даём OLX время загрузить объявления через JavaScript.
+
+            # Ждём загрузки объявлений JavaScript
             page.wait_for_timeout(7000)
             html = page.content()
             print("OLX: HTML получен, размер:", len(html))
@@ -162,6 +165,7 @@ def get_olx_html():
 # ============================================================
 # ПОИСК КАРТОЧЕК OLX
 # ============================================================
+
 def parse_olx(html):
     if not html:
         return []
