@@ -188,28 +188,42 @@ def parse_olx(html):
 
     for card in cards:
         try:
+            # ------------------------------------------------
+            # НАЗВАНИЕ
+            # ------------------------------------------------
             title_tag = card.find("h4")
             if not title_tag:
                 title_tag = card.find("h6")
-            title = title_tag.get_text(" ", strip=True) if title_tag else ""
+
+            title = ""
+            if title_tag:
+                title = title_tag.get_text(" ", strip=True)
+
             if not title:
                 continue
 
+            # ------------------------------------------------
+            # ССЫЛКА
+            # ------------------------------------------------
             link_tag = card.find("a", href=True)
             if not link_tag:
                 continue
+
             href = link_tag.get("href", "")
             if not href:
-            # ------------------------------------------------
-            # ОТБРАСЫВАЕМ РАСШИРЕННЫЙ ПОИСК OLX
-            # ------------------------------------------------
+                continue
+
+            # Не берём объявления, которые OLX добавил через расширенный поиск
             if "extended_search_extended_distance" in href:
-                print("OLX: пропускаем объявление из расширенного поиска:", href)
+                print("OLX: пропускаем объявление из расширенного поиска")
                 continue
 
             if href.startswith("/"):
                 href = "https://www.olx.ua" + href
 
+            # ------------------------------------------------
+            # ПРОВЕРКА ТЕКСТА И ЦЕНЫ
+            # ------------------------------------------------
             card_text = card.get_text(" ", strip=True)
             full_text = (title + " " + card_text).lower()
             price = extract_price(card_text)
@@ -230,6 +244,9 @@ def parse_olx(html):
         except Exception as e:
             print("Ошибка обработки карточки OLX:", e)
 
+    # --------------------------------------------------------
+    # УДАЛЯЕМ ДУБЛИКАТЫ
+    # --------------------------------------------------------
     unique = {}
     for item in results:
         url = item.get("url")
@@ -239,6 +256,7 @@ def parse_olx(html):
     results = list(unique.values())
     print("OLX: найдено подходящих:", len(results))
     return results
+
 
 
 # ============================================================
