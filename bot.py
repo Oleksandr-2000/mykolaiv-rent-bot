@@ -178,6 +178,11 @@ def parse_olx(html):
 
     # Временно выводим содержимое карточек, чтобы точно увидеть структуру OLX.
     for i, card in enumerate(cards, 1):
+    print(f"OLX CARD {i}:", card.get_text(" ", strip=True)[:1000])
+    link_tag = card.find("a", href=True)
+    if link_tag:
+        print(f"OLX URL {i}:", link_tag.get("href"))
+
         print(f"OLX CARD {i}:", card.get_text(" ", strip=True)[:1000])
 
     if not cards:
