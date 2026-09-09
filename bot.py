@@ -56,8 +56,20 @@ def is_daily_rent(text):
 def is_three_room(text):
     if not text:
         return False
+
     text = text.lower()
-    return any(template.lower() in text for template in ROOM_TEMPLATES)
+    room_templates = [
+        # Украинский
+        "3к ", "3к.", "3к/", "3х кімнат", "3-х кімнат",
+        "3 кімнат", "трьохкімнат", "трьох кімнат", "трикімнат", "три кімнат",
+
+        # Русский
+        "3-комнат", "3 комнат", "3-х комнат", "3х комнат", "3-комн",
+        "3 комн", "3-к.", "3-к", "3 к/к", "3-к/к"
+    ]
+
+    return any(template in text for template in room_templates)
+
 
 def extract_price(text):
     if not text:
