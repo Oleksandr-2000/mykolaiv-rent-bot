@@ -200,7 +200,13 @@ def parse_olx(html):
                 continue
             href = link_tag.get("href", "")
             if not href:
+            # ------------------------------------------------
+            # ОТБРАСЫВАЕМ РАСШИРЕННЫЙ ПОИСК OLX
+            # ------------------------------------------------
+            if "extended_search_extended_distance" in href:
+                print("OLX: пропускаем объявление из расширенного поиска:", href)
                 continue
+
             if href.startswith("/"):
                 href = "https://www.olx.ua" + href
 
