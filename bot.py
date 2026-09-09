@@ -178,6 +178,8 @@ def parse_olx(html):
     # --------------------------------------------------------
     cards = soup.find_all("div", attrs={"data-cy": "l-card"})
     print("OLX: найдено стандартных карточек:", len(cards))
+    for i, card in enumerate(cards, 1):
+    print(f"OLX CARD {i}:", card.get_text(" ", strip=True)[:1000])
 
     # --------------------------------------------------------
     # Если стандартных карточек нет, ищем ссылки на объявления
