@@ -165,45 +165,131 @@ def get_olx_feed():
 def parse_olx(html):
     if not html:
         return []
+
     soup = BeautifulSoup(html, "html.parser")
     results = []
+    seen_urls = set()
+
+    # --------------------------------------------------------
+    # Способ 1: стандартные карточки OLX
+    # --------------------------------------------------------
     cards = soup.find_all("div", attrs={"data-cy": "l-card"})
-    print("OLX: найдено карточек:", len(cards))
+    print("OLX: стандартных карточек:", len(cards))
 
     for card in cards:
         try:
-            title_tag = card.find("h4")
-            if not title_tag:
-                title_tag = card.find("h6")
+            title_tag = card.find(["h4", "h6"])
             title = title_tag.get_text(" ", strip=True) if title_tag else ""
-            if not title:
-                continue
 
             link_tag = card.find("a", href=True)
             if not link_tag:
                 continue
+
             href = link_tag.get("href", "")
             if not href:
                 continue
+
             if href.startswith("/"):
-                href = "https://www.olx.ua" + href
+                href = "https://olx.ua" + href
 
             card_text = card.get_text(" ", strip=True)
             price = extract_price(card_text)
-            if price is None:
-                continue
 
             if not is_valid_listing(title, card_text, price):
                 continue
 
+            if href in seen_urls:
+                continue
+
+            seen_urls.add(href)
             results.append({
                 "title": title,
                 "price": price,
                 "description": card_text,
                 "url": href,
             })
+
         except Exception as e:
-            print("Ошибка обработки карточки OLX:", e)
+            print("Ошибка стандартной карточки OLX:", e)
+
+    # --------------------------------------------------------
+    # Способ 2: ищем ссылки на объявления OLX
+    # --------------------------------------------------------
+    if not cards:
+        print("OLX: стандартных карточек нет.")
+        print("OLX: запускаем альтернативный поиск...")
+
+    links = soup.find_all("a", href=True)
+    olx_links = []
+
+    for link in links:
+        href = link.get("href", "")
+        if "/d/uk/obyavlenie/" in href:
+            olx_links.append(link)
+        elif "/d/uk/" in href:
+            olx_links.append(link)
+        elif "/d/obyavlenie/" in href:
+            olx_links.append(link)
+
+    print("OLX: найдено ссылок на объявления:", len(olx_links))
+
+    for link in olx_links:
+        try:
+            href = link.get("href", "")
+            if not href:
+                continue
+
+            if href.startswith("/"):
+                href = "https://olx.ua" + href
+
+            if href in seen_urls:
+                continue
+
+            # Получаем текст ближайшего блока
+            container = link
+            for _ in range(4):
+                if container.parent:
+                    container = container.parent
+
+            block_text = container.get_text(" ", strip=True)
+            title = link.get_text(" ", strip=True)
+
+            # Если текст ссылки короткий, ищем заголовок внутри блока
+            if len(title) < 5:
+                title_tag = container.find(["h4", "h6", "h3", "h2"])
+                if title_tag:
+                    title = title_tag.get_text(" ", strip=True)
+
+            if not title:
+                continue
+
+            price = extract_price(block_text)
+
+            if not is_valid_listing(title, block_text, price):
+                continue
+
+            seen_urls.add(href)
+            results.append({
+                "title": title,
+                "price": price,
+                "description": block_text,
+                "url": href,
+            })
+
+        except Exception as e:
+            print("Ошибка альтернативного парсинга OLX:", e)
+
+    # --------------------------------------------------------
+    # Убираем дубли
+    # --------------------------------------------------------
+    unique = {}
+    for item in results:
+        url = item.get("url")
+        if url:
+            unique[url] = item
+
+    results = list(unique.values())
+    print("OLX: всего подходящих объявлений:", len(results))
     return results
 
 # ============================================================
