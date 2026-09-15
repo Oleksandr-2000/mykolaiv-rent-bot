@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 # ============================================================
 BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
 CHAT_ID = os.environ["CHAT_ID"].strip()
-MAX_PRICE = 6000
+MAX_PRICE = 7000
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 # ============================================================
@@ -21,7 +21,7 @@ OLX_SEARCH_URL = (
     "https://www.olx.ua/uk/nedvizhimost/kvartiry/"
     "dolgosrochnaya-arenda-kvartir/nikolaev_106/"
     "?currency=UAH"
-    "&search%5Bfilter_float_price:to%5D=6000"
+    "&search%5Bfilter_float_price:to%5D=7000"
     "&search%5Bfilter_enum_number_of_rooms_string%5D%5B0%5D=trehkomnatnye"
 )
 
