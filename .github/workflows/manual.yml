@@ -1,8 +1,6 @@
 name: Telegram Rent Bot
 
 on:
-  schedule:
-  - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
@@ -10,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
